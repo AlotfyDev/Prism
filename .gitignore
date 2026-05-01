@@ -28,3 +28,8 @@ Thumbs.db
 
 # ICM local (managed separately)
 Portable_ICM/
+
+# Prism local-only (not part of public repo)
+worktrees/
+references/leankg/
+skills/
