@@ -190,13 +190,26 @@ _CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
         {
             LayerType.PARAGRAPH,
             LayerType.LIST,       # recursive: sub-lists
+            LayerType.TABLE,
             LayerType.CODE_BLOCK,
+            LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
+            LayerType.DIAGRAM,
+            LayerType.HEADING,
         },
         -1,  # unlimited sub-list depth
     ),
     LayerType.TABLE: (
-        {LayerType.FIGURE},  # images inside cells
+        {
+            LayerType.PARAGRAPH,
+            LayerType.LIST,
+            LayerType.TABLE,       # nested tables in cells
+            LayerType.CODE_BLOCK,
+            LayerType.BLOCKQUOTE,
+            LayerType.FIGURE,
+            LayerType.DIAGRAM,
+            LayerType.HEADING,
+        },
         1,
     ),
     LayerType.BLOCKQUOTE: (
@@ -473,6 +486,207 @@ class PhysicalComponent(BaseModel):
             return 0
         start, end = self.token_span
         return max(0, end - start + 1)
+
+
+# =============================================================================
+# NESTED OBJECT SCHEMAS — Table and List internal structure
+# =============================================================================
+
+
+class CellPosition(BaseModel):
+    """Position of a component inside a table cell."""
+
+    row: int = Field(
+        ...,
+        ge=0,
+        description="Row index (0-based)",
+    )
+    col: int = Field(
+        ...,
+        ge=0,
+        description="Column index (0-based)",
+    )
+    is_header: bool = Field(
+        default=False,
+        description="True if this cell is in the header row",
+    )
+
+
+class ListStyle(str, Enum):
+    """List rendering style."""
+
+    ORDERED = "ordered"
+    UNORDERED = "unordered"
+
+
+class ListItem(BaseModel):
+    """A single item within a list component.
+
+    List items are structural elements (not LayerTypes). Each item
+    can contain child PhysicalComponents (paragraphs, sub-lists,
+    code blocks, figures, etc.).
+    """
+
+    item_index: int = Field(
+        ...,
+        ge=0,
+        description="Position in parent list (0-based)",
+    )
+    children: list[str] = Field(
+        default_factory=list,
+        description="Child PhysicalComponent IDs (paragraphs, sub-lists, code blocks, etc.)",
+    )
+    char_start: Optional[int] = Field(
+        default=None,
+        description="Character offset in source text (start, inclusive)",
+    )
+    char_end: Optional[int] = Field(
+        default=None,
+        description="Character offset in source text (end, exclusive)",
+    )
+
+
+class TableCell(BaseModel):
+    """A single cell within a table row.
+
+    Table cells are structural elements (not LayerTypes). Each cell
+    can contain child PhysicalComponents (paragraphs, lists, code blocks,
+    figures, diagrams, etc.).
+    """
+
+    position: CellPosition = Field(
+        ...,
+        description="Row and column position of this cell",
+    )
+    children: list[str] = Field(
+        default_factory=list,
+        description="Child PhysicalComponent IDs within this cell",
+    )
+    char_start: Optional[int] = Field(
+        default=None,
+        description="Character offset in source text (start, inclusive)",
+    )
+    char_end: Optional[int] = Field(
+        default=None,
+        description="Character offset in source text (end, exclusive)",
+    )
+
+
+class TableRow(BaseModel):
+    """A single row within a table component."""
+
+    row_index: int = Field(
+        ...,
+        ge=0,
+        description="Row index (0-based)",
+    )
+    cells: list[TableCell] = Field(
+        default_factory=list,
+        description="Cells in this row (length must match table num_cols)",
+    )
+
+
+class TableComponent(PhysicalComponent):
+    """A table physical component with structured row/cell layout.
+
+    Extends PhysicalComponent with explicit table structure:
+    - rows: organized by TableRow → TableCell → child components
+    - num_cols: column count (validated for consistency)
+    - has_header: whether first row is a header
+
+    The inherited `children` field holds all child component IDs (flat),
+    while `rows` provides the structured hierarchical view.
+    """
+
+    rows: list[TableRow] = Field(
+        default_factory=list,
+        description="Table rows with cells and their child components",
+    )
+    num_cols: int = Field(
+        default=0,
+        ge=0,
+        description="Number of columns (auto-set from rows if 0)",
+    )
+    has_header: bool = Field(
+        default=False,
+        description="True if the first row is a header row",
+    )
+
+    @model_validator(mode="after")
+    def validate_table_structure(self) -> "TableComponent":
+        if self.rows:
+            # Auto-detect num_cols from first row if not set
+            if self.num_cols == 0:
+                self.num_cols = len(self.rows[0].cells)
+
+            # Validate all rows have consistent column count
+            for row in self.rows:
+                if len(row.cells) != self.num_cols:
+                    raise ValueError(
+                        f"Table {self.component_id}: row {row.row_index} has "
+                        f"{len(row.cells)} cells, expected {self.num_cols}"
+                    )
+
+            # Validate cell positions match row/cell indices
+            for row in self.rows:
+                for cell in row.cells:
+                    if cell.position.row != row.row_index:
+                        raise ValueError(
+                            f"Table {self.component_id}: cell at ({cell.position.row}, "
+                            f"{cell.position.col}) has row mismatch with parent row {row.row_index}"
+                        )
+                    expected_col = row.cells.index(cell)
+                    if cell.position.col != expected_col:
+                        raise ValueError(
+                            f"Table {self.component_id}: cell at row {row.row_index} "
+                            f"has col {cell.position.col}, expected {expected_col}"
+                        )
+
+            # Validate header row position flag
+            for row in self.rows:
+                for cell in row.cells:
+                    expected_header = self.has_header and row.row_index == 0
+                    if cell.position.is_header != expected_header:
+                        raise ValueError(
+                            f"Table {self.component_id}: cell ({cell.position.row}, "
+                            f"{cell.position.col}) is_header={cell.position.is_header} "
+                            f"doesn't match expected={expected_header}"
+                        )
+
+        return self
+
+
+class ListComponent(PhysicalComponent):
+    """A list physical component with structured item layout.
+
+    Extends PhysicalComponent with explicit list structure:
+    - items: organized by ListItem → child components
+    - style: ordered (numbered) or unordered (bulleted)
+
+    The inherited `children` field holds all child component IDs (flat),
+    while `items` provides the structured hierarchical view.
+    """
+
+    items: list[ListItem] = Field(
+        default_factory=list,
+        description="List items with their child components",
+    )
+    style: ListStyle = Field(
+        default=ListStyle.UNORDERED,
+        description="List rendering style (ordered or unordered)",
+    )
+
+    @model_validator(mode="after")
+    def validate_list_structure(self) -> "ListComponent":
+        if self.items:
+            # Validate item indices are sequential
+            for i, item in enumerate(self.items):
+                if item.item_index != i:
+                    raise ValueError(
+                        f"List {self.component_id}: item at position {i} has "
+                        f"item_index={item.item_index}, expected {i}"
+                    )
+        return self
 
 
 class TopologyConfig(BaseModel):

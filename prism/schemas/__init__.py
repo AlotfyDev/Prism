@@ -24,8 +24,12 @@ from prism.schemas.global_pg import (
     TopicCluster,
 )
 from prism.schemas.physical import (
+    CellPosition,
     DetectedLayersReport,
     LayerInstance,
+    ListComponent,
+    ListItem,
+    ListStyle,
     MarkdownNode,
     NestingMatrix,
     NestingRule,
@@ -33,6 +37,9 @@ from prism.schemas.physical import (
     PhysicalComponent,
     Stage2Input,
     Stage2Output,
+    TableComponent,
+    TableCell,
+    TableRow,
     TopologyConfig,
 )
 from prism.schemas.semantic import (
@@ -86,6 +93,13 @@ __all__ = [
     "NestingMatrix",
     "NestingRule",
     "NESTING_MATRIX",
+    "CellPosition",
+    "ListStyle",
+    "ListItem",
+    "TableCell",
+    "TableRow",
+    "TableComponent",
+    "ListComponent",
     # Stage 3
     "MiniTopic",
     "PredicateFrame",
