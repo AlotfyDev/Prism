@@ -1,7 +1,7 @@
 {
   "repo": "AlotfyDev/Prism",
   "branch": "master",
-  "last_updated": "2026-05-01T05:32:37Z",
+  "last_updated": "2026-05-01T05:37:45Z",
   "file_count": 67,
   "files": [
     {
@@ -108,7 +108,7 @@
       "path": "CLAUDE.md",
       "filename": "CLAUDE.md",
       "extension": "md",
-      "size_bytes": 13331,
+      "size_bytes": 13737,
       "top_level_dir": "CLAUDE.md",
       "category": "documentation",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/CLAUDE.md",
@@ -668,7 +668,7 @@
       "path": "WINDOW_CONTEXT_PROTOCOL.md",
       "filename": "WINDOW_CONTEXT_PROTOCOL.md",
       "extension": "md",
-      "size_bytes": 10313,
+      "size_bytes": 10554,
       "top_level_dir": "WINDOW_CONTEXT_PROTOCOL.md",
       "category": "documentation",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/WINDOW_CONTEXT_PROTOCOL.md",
