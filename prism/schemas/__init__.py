@@ -24,6 +24,8 @@ from prism.schemas.global_pg import (
     TopicCluster,
 )
 from prism.schemas.physical import (
+    MarkdownNode,
+    NodeType,
     PhysicalComponent,
     Stage2Input,
     Stage2Output,
@@ -62,6 +64,7 @@ __all__ = [
     "SemanticLevel",
     "TokenType",
     "TopicClustering",
+    "NodeType",
     # Stage 1
     "Token",
     "TokenMetadata",
@@ -73,6 +76,7 @@ __all__ = [
     "TopologyConfig",
     "Stage2Input",
     "Stage2Output",
+    "MarkdownNode",
     # Stage 3
     "MiniTopic",
     "PredicateFrame",

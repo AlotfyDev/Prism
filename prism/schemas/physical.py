@@ -1,11 +1,90 @@
 """Physical component schema models for Stage 2 (Physical Topology)."""
 
 import re
+from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from prism.schemas.enums import LayerType
+
+
+class NodeType(str, Enum):
+    """AST node types produced by MarkdownItParser.
+
+    Maps to LayerType for physical topology classification.
+    Inline, HR, and LIST_ITEM are parser-level concepts, not physical layers.
+    """
+
+    HEADING = "heading"
+    PARAGRAPH = "paragraph"
+    TABLE = "table"
+    LIST = "list"
+    LIST_ITEM = "list_item"
+    CODE_BLOCK = "code_block"
+    BLOCKQUOTE = "blockquote"
+    HR = "hr"
+    INLINE = "inline"
+
+    def to_layer_type(self) -> Optional[LayerType]:
+        """Convert NodeType to LayerType if applicable.
+
+        Returns None for parser-only types (inline, hr, list_item).
+        """
+        mapping = {
+            NodeType.HEADING: LayerType.HEADING,
+            NodeType.PARAGRAPH: LayerType.PARAGRAPH,
+            NodeType.TABLE: LayerType.TABLE,
+            NodeType.LIST: LayerType.LIST,
+            NodeType.LIST_ITEM: None,
+            NodeType.CODE_BLOCK: LayerType.CODE_BLOCK,
+            NodeType.BLOCKQUOTE: LayerType.BLOCKQUOTE,
+            NodeType.HR: None,
+            NodeType.INLINE: None,
+        }
+        return mapping.get(self)
+
+
+class MarkdownNode(BaseModel):
+    """A node in the parsed Markdown AST.
+
+    Produced by MarkdownItParser. Consumed by LayerClassifier (P2.2)
+    which maps NodeType → PhysicalComponent.
+    """
+
+    node_type: NodeType = Field(
+        ...,
+        description="AST node type",
+    )
+    raw_content: str = Field(
+        ...,
+        min_length=1,
+        description="Raw Markdown text for this node",
+    )
+    char_start: Optional[int] = Field(
+        default=None,
+        description="Character offset in source text (start, inclusive)",
+    )
+    char_end: Optional[int] = Field(
+        default=None,
+        description="Character offset in source text (end, exclusive)",
+    )
+    level: Optional[int] = Field(
+        default=None,
+        description="Heading level (1-6), or nesting depth for lists",
+    )
+    children: list["MarkdownNode"] = Field(
+        default_factory=list,
+        description="Child nodes in the AST tree",
+    )
+    attributes: dict[str, str] = Field(
+        default_factory=dict,
+        description="Extra attributes (e.g., language for code blocks)",
+    )
+
+
+# Resolve forward reference
+MarkdownNode.model_rebuild()
 
 
 _COMPONENT_ID_PATTERN = re.compile(r"^[a-z_]+:.+$")
