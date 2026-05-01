@@ -4,7 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from prism.schemas.enums import LayerType
-from prism.schemas.physical import DetectedLayersReport, LayerInstance
+from prism.schemas.physical import (
+    DetectedLayersReport,
+    LayerInstance,
+    NestingMatrix,
+    NestingRule,
+)
 
 
 class TestLayerInstance:
@@ -345,3 +350,135 @@ class TestDetectedLayersReport:
         report = DetectedLayersReport(source_text="test" * 10, instances=instances)
         assert len(report.detected_types) == len(LayerType)
         assert report.total_instances == len(LayerType)
+
+
+class TestNestingRule:
+    """NestingRule Pydantic schema validation."""
+
+    def test_valid_container_rule(self):
+        rule = NestingRule(
+            parent=LayerType.HEADING,
+            allowed_children={LayerType.PARAGRAPH, LayerType.LIST},
+            max_depth=1,
+        )
+        assert not rule.is_leaf
+        assert not rule.allows_recursive_nesting
+
+    def test_valid_leaf_rule(self):
+        rule = NestingRule(
+            parent=LayerType.CODE_BLOCK,
+            allowed_children=set(),
+            max_depth=0,
+        )
+        assert rule.is_leaf
+        assert not rule.allows_recursive_nesting
+
+    def test_recursive_nesting(self):
+        rule = NestingRule(
+            parent=LayerType.LIST,
+            allowed_children={LayerType.LIST},
+            max_depth=-1,
+        )
+        assert rule.allows_recursive_nesting
+
+
+class TestNestingMatrix:
+    """NestingMatrix validation rules."""
+
+    def test_default_matrix_has_all_types(self):
+        matrix = NestingMatrix.default()
+        assert len(matrix.rules) == len(LayerType)
+
+    def test_leaf_types_are_leaves(self):
+        matrix = NestingMatrix.default()
+        for lt in (
+            LayerType.CODE_BLOCK,
+            LayerType.DIAGRAM,
+            LayerType.FIGURE,
+            LayerType.METADATA,
+        ):
+            assert matrix.is_leaf(lt)
+
+    def test_container_types_are_not_leaves(self):
+        matrix = NestingMatrix.default()
+        for lt in (
+            LayerType.HEADING,
+            LayerType.PARAGRAPH,
+            LayerType.LIST,
+            LayerType.TABLE,
+            LayerType.BLOCKQUOTE,
+            LayerType.FOOTNOTE,
+        ):
+            assert not matrix.is_leaf(lt)
+
+    def test_heading_can_contain_paragraph(self):
+        matrix = NestingMatrix.default()
+        assert matrix.can_contain(LayerType.HEADING, LayerType.PARAGRAPH)
+
+    def test_heading_cannot_contain_heading(self):
+        matrix = NestingMatrix.default()
+        assert not matrix.can_contain(LayerType.HEADING, LayerType.HEADING)
+
+    def test_list_can_contain_list_recursive(self):
+        matrix = NestingMatrix.default()
+        assert matrix.can_contain(LayerType.LIST, LayerType.LIST)
+        assert matrix.max_depth_for(LayerType.LIST) == -1
+
+    def test_blockquote_can_contain_blockquote_recursive(self):
+        matrix = NestingMatrix.default()
+        assert matrix.can_contain(LayerType.BLOCKQUOTE, LayerType.BLOCKQUOTE)
+
+    def test_code_block_cannot_contain_anything(self):
+        matrix = NestingMatrix.default()
+        for lt in LayerType:
+            assert not matrix.can_contain(LayerType.CODE_BLOCK, lt)
+
+    def test_get_valid_children(self):
+        matrix = NestingMatrix.default()
+        children = matrix.get_valid_children(LayerType.HEADING)
+        assert LayerType.PARAGRAPH in children
+        assert LayerType.HEADING not in children
+
+    def test_get_valid_parents(self):
+        matrix = NestingMatrix.default()
+        parents = matrix.get_valid_parents(LayerType.PARAGRAPH)
+        assert LayerType.HEADING in parents
+        assert LayerType.BLOCKQUOTE in parents
+        assert LayerType.CODE_BLOCK not in parents
+
+    def test_validate_hierarchy_valid(self):
+        matrix = NestingMatrix.default()
+        children = [
+            (LayerType.PARAGRAPH, 0),
+            (LayerType.LIST, 0),
+        ]
+        valid, msg = matrix.validate_hierarchy(
+            children=children,
+            parent_type=LayerType.HEADING,
+        )
+        assert valid
+
+    def test_validate_hierarchy_invalid_child(self):
+        matrix = NestingMatrix.default()
+        children = [(LayerType.HEADING, 0)]
+        valid, msg = matrix.validate_hierarchy(
+            children=children,
+            parent_type=LayerType.PARAGRAPH,
+        )
+        assert not valid
+
+    def test_validate_hierarchy_leaf_parent(self):
+        matrix = NestingMatrix.default()
+        children = [(LayerType.PARAGRAPH, 0)]
+        valid, msg = matrix.validate_hierarchy(
+            children=children,
+            parent_type=LayerType.CODE_BLOCK,
+        )
+        assert not valid
+        assert "leaf" in msg.lower()
+
+    def test_global_matrix_is_valid(self):
+        """NESTING_MATRIX singleton is correctly initialized."""
+        from prism.schemas.physical import NESTING_MATRIX
+        assert len(NESTING_MATRIX.rules) == len(LayerType)
+        assert NESTING_MATRIX.can_contain(LayerType.HEADING, LayerType.PARAGRAPH)

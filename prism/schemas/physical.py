@@ -123,6 +123,20 @@ class LayerInstance(BaseModel):
         min_length=1,
         description="Raw Markdown content of this instance",
     )
+    depth: int = Field(
+        default=0,
+        ge=0,
+        description="Nesting depth (0 = root, 1 = first level nested, etc.)",
+    )
+    sibling_index: int = Field(
+        default=0,
+        ge=0,
+        description="Position among siblings at the same nesting level",
+    )
+    parent_id: Optional[str] = Field(
+        default=None,
+        description="ID of parent instance (None for root-level instances)",
+    )
     attributes: dict[str, str] = Field(
         default_factory=dict,
         description="Extra attributes (e.g., heading_level=2, language=python, style=unordered)",
@@ -139,6 +153,202 @@ class LayerInstance(BaseModel):
                 f"line_end ({self.line_end}) must be >= line_start ({self.line_start})"
             )
         return self
+
+
+# =============================================================================
+# NESTING MATRIX — Validation rules for parent-child hierarchy
+# =============================================================================
+
+# Leaf types: cannot contain any children
+_LEAF_TYPES: frozenset[LayerType] = frozenset({
+    LayerType.CODE_BLOCK,
+    LayerType.DIAGRAM,
+    LayerType.FIGURE,
+    LayerType.METADATA,
+})
+
+# Container types: can contain children, with max_depth limits
+# max_depth: 1 = no recursive nesting of same type, -1 = unlimited
+_CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
+    LayerType.HEADING: (
+        {
+            LayerType.PARAGRAPH,
+            LayerType.LIST,
+            LayerType.TABLE,
+            LayerType.CODE_BLOCK,
+            LayerType.BLOCKQUOTE,
+            LayerType.FIGURE,
+            LayerType.DIAGRAM,
+        },
+        1,  # heading cannot contain another heading
+    ),
+    LayerType.PARAGRAPH: (
+        {LayerType.FIGURE},  # inline images only
+        1,
+    ),
+    LayerType.LIST: (
+        {
+            LayerType.PARAGRAPH,
+            LayerType.LIST,       # recursive: sub-lists
+            LayerType.CODE_BLOCK,
+            LayerType.FIGURE,
+        },
+        -1,  # unlimited sub-list depth
+    ),
+    LayerType.TABLE: (
+        {LayerType.FIGURE},  # images inside cells
+        1,
+    ),
+    LayerType.BLOCKQUOTE: (
+        {
+            LayerType.HEADING,
+            LayerType.PARAGRAPH,
+            LayerType.LIST,
+            LayerType.TABLE,
+            LayerType.CODE_BLOCK,
+            LayerType.BLOCKQUOTE,  # recursive: nested quotes
+            LayerType.FIGURE,
+        },
+        -1,  # unlimited quote nesting
+    ),
+    LayerType.FOOTNOTE: (
+        {LayerType.PARAGRAPH, LayerType.FIGURE},
+        1,
+    ),
+}
+
+
+class NestingRule(BaseModel):
+    """A single parent-child nesting rule."""
+
+    parent: LayerType = Field(..., description="The container type")
+    allowed_children: set[LayerType] = Field(
+        default_factory=set,
+        description="Types this parent can contain",
+    )
+    max_depth: int = Field(
+        default=1,
+        description="Max recursive depth (-1 = unlimited)",
+    )
+
+    @property
+    def is_leaf(self) -> bool:
+        """True if this type cannot contain any children."""
+        return len(self.allowed_children) == 0
+
+    @property
+    def allows_recursive_nesting(self) -> bool:
+        """True if this type allows unlimited nesting depth."""
+        return self.max_depth == -1
+
+
+class NestingMatrix(BaseModel):
+    """Complete nesting validation rules for all 10 LayerType values.
+
+    This is the source of truth for parent-child hierarchy validation.
+    Read by LayerClassifier to validate component hierarchies.
+    Not embedded in PhysicalComponent — it's a read-only rule set.
+    """
+
+    rules: dict[LayerType, NestingRule] = Field(
+        default_factory=dict,
+        description="LayerType -> its nesting rule",
+    )
+
+    @classmethod
+    def default(cls) -> "NestingMatrix":
+        """Build the canonical nesting matrix from _CONTAINER_RULES and _LEAF_TYPES."""
+        rules: dict[LayerType, NestingRule] = {}
+
+        # Container types
+        for lt, (children, max_depth) in _CONTAINER_RULES.items():
+            rules[lt] = NestingRule(
+                parent=lt,
+                allowed_children=children,
+                max_depth=max_depth,
+            )
+
+        # Leaf types
+        for lt in _LEAF_TYPES:
+            rules[lt] = NestingRule(
+                parent=lt,
+                allowed_children=set(),
+                max_depth=0,
+            )
+
+        return cls(rules=rules)
+
+    def can_contain(self, parent: LayerType, child: LayerType) -> bool:
+        """Check if a parent type can contain a child type."""
+        rule = self.rules.get(parent)
+        if rule is None:
+            return False
+        return child in rule.allowed_children
+
+    def is_leaf(self, layer_type: LayerType) -> bool:
+        """Check if a type is a leaf (cannot contain children)."""
+        rule = self.rules.get(layer_type)
+        if rule is None:
+            return True
+        return rule.is_leaf
+
+    def max_depth_for(self, layer_type: LayerType) -> int:
+        """Get the max nesting depth for a type."""
+        rule = self.rules.get(layer_type)
+        if rule is None:
+            return 0
+        return rule.max_depth
+
+    def get_valid_children(self, parent: LayerType) -> set[LayerType]:
+        """Get all types that can be children of the given parent."""
+        rule = self.rules.get(parent)
+        if rule is None:
+            return set()
+        return rule.allowed_children
+
+    def get_valid_parents(self, child: LayerType) -> set[LayerType]:
+        """Get all types that can contain the given child."""
+        return {
+            lt
+            for lt, rule in self.rules.items()
+            if child in rule.allowed_children
+        }
+
+    def validate_hierarchy(
+        self,
+        children: list[tuple[LayerType, int]],
+        parent_type: LayerType,
+        parent_depth: int = 0,
+    ) -> tuple[bool, str]:
+        """Validate a list of (child_type, child_depth) against nesting rules.
+
+        Returns (is_valid, error_message).
+        """
+        rule = self.rules.get(parent_type)
+        if rule is None:
+            return False, f"Unknown parent type: {parent_type}"
+
+        if rule.is_leaf:
+            return False, f"LayerType '{parent_type.value}' is a leaf — cannot contain children"
+
+        for child_type, child_depth in children:
+            if child_type not in rule.allowed_children:
+                return False, (
+                    f"LayerType '{parent_type.value}' cannot contain "
+                    f"'{child_type.value}'"
+                )
+
+            if rule.max_depth != -1 and child_depth > rule.max_depth:
+                return False, (
+                    f"LayerType '{child_type.value}' nesting depth {child_depth} "
+                    f"exceeds max_depth {rule.max_depth} under '{parent_type.value}'"
+                )
+
+        return True, ""
+
+
+# Global nesting matrix instance
+NESTING_MATRIX: NestingMatrix = NestingMatrix.default()
 
 
 class DetectedLayersReport(BaseModel):

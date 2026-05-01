@@ -27,6 +27,8 @@ from prism.schemas.physical import (
     DetectedLayersReport,
     LayerInstance,
     MarkdownNode,
+    NestingMatrix,
+    NestingRule,
     NodeType,
     PhysicalComponent,
     Stage2Input,
@@ -81,6 +83,9 @@ __all__ = [
     "MarkdownNode",
     "LayerInstance",
     "DetectedLayersReport",
+    "NestingMatrix",
+    "NestingRule",
+    "NESTING_MATRIX",
     # Stage 3
     "MiniTopic",
     "PredicateFrame",
