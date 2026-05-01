@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prism"
+version = "0.1.0"
+description = "Hybrid Neuro-Symbolic NLP Pipeline — Markdown to Property Graph"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+dependencies = [
+    # Core schema validation
+    "pydantic>=2.6",
+
+    # NLP — Tokenization & NER
+    "spacy>=3.7",
+    "gliner>=0.2",
+
+    # NLP — SRL & Coreference
+    "stanza>=1.7",
+
+    # Embeddings (local ONNX)
+    "fastembed>=0.3",
+
+    # Orchestration
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+
+    # Markdown parsing
+    "markdown-it-py>=3.0",
+
+    # Topic extraction fallback
+    "keybert>=0.8",
+
+    # Observability
+    "structlog>=24.1",
+
+    # Config loading
+    "pyyaml>=6.0",
+    "toml>=0.10",
+
+    # Math / arrays
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+
+    # LLM provider (OpenAI-compatible API)
+    "openai>=1.10",
+    "aiohttp>=3.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-bdd>=7.0",
+    "hypothesis>=6.100",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "ruff>=0.3",
+    "mypy>=1.8",
+]
+
+[project.scripts]
+prism = "prism.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["prism*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
