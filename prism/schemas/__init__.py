@@ -24,6 +24,8 @@ from prism.schemas.global_pg import (
     TopicCluster,
 )
 from prism.schemas.physical import (
+    DetectedLayersReport,
+    LayerInstance,
     MarkdownNode,
     NodeType,
     PhysicalComponent,
@@ -77,6 +79,8 @@ __all__ = [
     "Stage2Input",
     "Stage2Output",
     "MarkdownNode",
+    "LayerInstance",
+    "DetectedLayersReport",
     # Stage 3
     "MiniTopic",
     "PredicateFrame",

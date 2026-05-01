@@ -87,6 +87,112 @@ class MarkdownNode(BaseModel):
 MarkdownNode.model_rebuild()
 
 
+class LayerInstance(BaseModel):
+    """A single detected instance of a physical layer type.
+
+    Produced by Stage 2a (Detection). Consumed by Stage 2b (Classifier)
+    which converts instances into PhysicalComponent objects.
+    """
+
+    layer_type: LayerType = Field(
+        ...,
+        description="Physical layer type of this instance",
+    )
+    char_start: int = Field(
+        ...,
+        ge=0,
+        description="Character offset in source text (start, inclusive)",
+    )
+    char_end: int = Field(
+        ...,
+        ge=0,
+        description="Character offset in source text (end, exclusive)",
+    )
+    line_start: int = Field(
+        ...,
+        ge=0,
+        description="Line number in source text (0-indexed, inclusive)",
+    )
+    line_end: int = Field(
+        ...,
+        ge=0,
+        description="Line number in source text (0-indexed, exclusive)",
+    )
+    raw_content: str = Field(
+        ...,
+        min_length=1,
+        description="Raw Markdown content of this instance",
+    )
+    attributes: dict[str, str] = Field(
+        default_factory=dict,
+        description="Extra attributes (e.g., heading_level=2, language=python, style=unordered)",
+    )
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "LayerInstance":
+        if self.char_end <= self.char_start:
+            raise ValueError(
+                f"char_end ({self.char_end}) must be > char_start ({self.char_start})"
+            )
+        if self.line_end <= self.line_start:
+            raise ValueError(
+                f"line_end ({self.line_end}) must be >= line_start ({self.line_start})"
+            )
+        return self
+
+
+class DetectedLayersReport(BaseModel):
+    """Output of Stage 2a: Detection/Exploration phase.
+
+    Reports which layer types exist in the document and where each
+    instance is located. All 10 LayerType values are discoverable.
+
+    All 10 LayerType values are supported:
+    - paragraph, heading, list, table, code_block, blockquote
+      (detected directly by markdown-it-py)
+    - metadata (YAML front matter via front_matter plugin)
+    - footnote (via footnote plugin)
+    - diagram (mermaid/graphviz code blocks, detected by classifier rule)
+    - figure (image blocks, detected by classifier rule)
+    """
+
+    source_text: str = Field(
+        ...,
+        description="Original source text from Stage 1",
+    )
+    detected_types: set[LayerType] = Field(
+        default_factory=set,
+        description="Layer types found in the document",
+    )
+    instances: dict[LayerType, list[LayerInstance]] = Field(
+        default_factory=dict,
+        description="Layer type -> list of detected instances",
+    )
+
+    @model_validator(mode="after")
+    def sync_detected_types(self) -> "DetectedLayersReport":
+        """Ensure detected_types matches instances keys."""
+        self.detected_types = set(self.instances.keys())
+        return self
+
+    @property
+    def total_instances(self) -> int:
+        """Total number of detected instances across all layer types."""
+        return sum(len(v) for v in self.instances.values())
+
+    def instances_of(self, layer_type: LayerType) -> list[LayerInstance]:
+        """Get all instances of a specific layer type."""
+        return self.instances.get(layer_type, [])
+
+    def has_type(self, layer_type: LayerType) -> bool:
+        """Check if a specific layer type was detected."""
+        return layer_type in self.detected_types
+
+    def layer_counts(self) -> dict[str, int]:
+        """Return count per layer type name."""
+        return {lt.value: len(instances) for lt, instances in self.instances.items()}
+
+
 _COMPONENT_ID_PATTERN = re.compile(r"^[a-z_]+:.+$")
 
 
