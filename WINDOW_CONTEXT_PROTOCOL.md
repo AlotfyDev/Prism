@@ -62,6 +62,20 @@ Based on current phase, read the relevant SKILL.md files:
 - **NO "fix it later"** — technical debt is introduced only with explicit justification
 - **TDD mandatory** — RED → GREEN → REFACTOR, no exceptions
 
+### Step 8: GitHub Repo Awareness (Step 8.5 — Check Before Any Push)
+```
+GitHub Repo: https://github.com/AlotfyDev/Prism.git
+Remote: origin | Default branch: master
+Auth: gh CLI (AlotfyDev account) | Credential: gh auth git-credential
+Workflow: .github/workflows/create-repo-index.yml (auto-generates repo-index.json)
+Size: ~2.4MB clean (no models, no refs, no skills, no AGENTS.md)
+Before ANY push:
+  1. git pull --rebase origin master (sync with remote)
+  2. Verify no .gitignored files staged (models, skills, leankg, AGENTS.md, worktrees)
+  3. git push origin master
+  4. Check workflow: gh run list --repo AlotfyDev/Prism --limit 1
+```
+
 ---
 
 ## 🔄 MANDATORY: Task Completion Protocol (6 Steps — Execute IN ORDER)
@@ -204,45 +218,40 @@ orchestrator ← all stages (wires together)
 cli-e2e ← orchestrator (user interface)
 ```
 
-### Shared Code Update Protocol
-When shared code (core/schemas) changes:
-1. Commit to `master` first
-2. Merge `master` into each affected stage branch
-3. Run tests on each stage branch to verify no regressions
-4. Update context files (CLAUDE.md, PRISM_STATE.md, HANDOFF.md)
+### 🔄 MANDATORY: Worktree Code Update Protocols (NON-NEGOTIABLE)
 
----
-
-## ⚡ Skill Conflict Resolution Priority
-
-| Area | Primary | Fallback |
-|------|---------|----------|
-| TDD | `superpowers/test-driven-development` | `agent-skills/test-driven-development` |
-| Debugging | `superpowers/systematic-debugging` | `agent-skills/debugging-and-error-recovery` |
-| Planning | `agent-skills/spec-driven-development` | `superpowers/writing-plans` |
-| Review | `agent-skills/code-review-and-quality` | `superpowers/requesting-code-review` |
-| Git | `agent-skills/git-workflow-and-versioning` | `superpowers/using-git-worktrees` |
-
----
-
-## 📋 Session Start Quick-Reference
-
+#### Protocol A: Shared Code Changes (schemas, core, pyproject.toml)
+When modifying ANY shared code that affects multiple stages:
 ```
-1. Read: prism-orchestrator/SKILL.md → determine phase + active skills
-2. Run: icm.exe recall --topic prism --limit 30 --no-embeddings "all"
-3. Read: CLAUDE.md → PRISM_STATE.md → HANDOFF.md → 06_TASKS.md → 07_WORKTREE_ARCHITECTURE.md
-4. Run: pytest tests/ --tb=short -q → expect 455 passed
-5. Load: active skills SKILL.md files
-6. Announce: phase, skills, next task, acceptance criteria, active worktree
-7. Execute: with Full Production Standard
+1. Commit to `master` branch first
+2. Merge `master` into each affected stage worktree:
+   cd worktrees/<stage> && git merge master
+3. Run tests in each affected worktree:
+   .venv/Scripts/python.exe -m pytest tests/ --tb=short -q
+4. Update context files (CLAUDE.md, PRISM_STATE.md, HANDOFF.md) in each affected worktree
+```
+
+#### Protocol B: Stage-Specific Code Changes
+When modifying code that belongs to ONE stage only:
+```
+1. Commit to the stage's own branch (wt/<stage_name>)
+2. DO NOT merge into master
+3. DO NOT affect other worktrees
+4. Run tests ONLY in the current worktree
+```
+
+#### Decision Tree
+```
+Is this code shared across stages? (core, schemas, config)
+  ├─ YES → Protocol A: commit to master → merge → test all
+  └─ NO  → Protocol B: commit to stage branch → test current only
 ```
 
 ### Worktree Awareness
 - ALWAYS know which worktree you're in: `worktrees/<name>/`
 - ALWAYS know which branch you're on: `wt/<name>`
-- Shared code changes → commit to `master` first, then merge into stage branches
-- Stage-specific code → commit to the stage's own branch
 - Never commit stage-specific code to `master`
+- Never skip merging shared code updates into affected stages
 - See `07_WORKTREE_ARCHITECTURE.md` for full layout and dependency flow
 
 ## 📋 Task Completion Quick-Reference
