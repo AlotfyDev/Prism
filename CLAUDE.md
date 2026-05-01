@@ -192,7 +192,14 @@ This file defines the complete 7-step session start protocol + 6-step task compl
 1. Read: `prism-orchestrator/SKILL.md` → determine phase + active skills
 2. Run: `Portable_ICM\bin\icm.exe recall --topic prism --limit 30 --no-embeddings "all"`
 3. Read: `CLAUDE.md` → `PRISM_STATE.md` → `HANDOFF.md` → `06_TASKS.md`
-4. Run: `pytest tests/ --tb=short -q` → expect 258 passed
+4. Run: `pytest tests/ --tb=short -q` → expect 455 passed
 5. Load: active skills SKILL.md files
 6. Announce: phase, skills, next task, acceptance criteria
 7. Execute: with Full Production Standard (NEVER MVP)
+
+### GitHub Repo Awareness:
+- **Repo:** https://github.com/AlotfyDev/Prism.git
+- **Remote:** origin | **Branch:** master | **Auth:** gh CLI (AlotfyDev)
+- **Workflow:** create-repo-index.yml auto-generates repo-index.json on every push
+- **Before push:** `git pull --rebase origin master` → verify .gitignore → push
+- **ICM memories:** 17+ memories stored, including GitHub repo details (Step 8 in WCP)
