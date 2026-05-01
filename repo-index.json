@@ -1,8 +1,8 @@
 {
   "repo": "AlotfyDev/Prism",
   "branch": "master",
-  "last_updated": "2026-05-01T05:25:10Z",
-  "file_count": 389,
+  "last_updated": "2026-05-01T05:29:18Z",
+  "file_count": 388,
   "files": [
     {
       "path": ".github/scripts/generate_repo_index.py",
@@ -28,7 +28,7 @@
       "path": ".gitignore",
       "filename": ".gitignore",
       "extension": "",
-      "size_bytes": 354,
+      "size_bytes": 435,
       "top_level_dir": ".gitignore",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/.gitignore",
@@ -93,16 +93,6 @@
       "category": "documentation",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/00.00_Project_Management/06_TASKS.md",
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/00.00_Project_Management/06_TASKS.md"
-    },
-    {
-      "path": "AGENTS.md",
-      "filename": "AGENTS.md",
-      "extension": "md",
-      "size_bytes": 1935,
-      "top_level_dir": "AGENTS.md",
-      "category": "documentation",
-      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/AGENTS.md",
-      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/AGENTS.md"
     },
     {
       "path": "prism/__init__.py",
