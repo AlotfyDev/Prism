@@ -33,3 +33,7 @@ Portable_ICM/
 worktrees/
 references/leankg/
 skills/
+AGENTS.md
+
+# Large model files (downloaded separately, not tracked)
+data/models/
