@@ -164,17 +164,17 @@ Portable_ICM\bin\icm.exe recall --topic prism --limit 5 --no-embeddings "latest"
 
 ---
 
-## 📊 Current State (as of 2026-05-01)
+## 📊 Current State (as of 2026-05-01 — Stage 2 Worktree)
 
 | Metric | Value |
 |--------|-------|
-| **Phase** | P1 COMPLETE — Moving to P2 (Physical Topology) |
-| **Tasks Complete** | 14/48 (P0.1–P0.8, P1.1–P1.5) |
-| **Tests Passing** | 455/455 |
-| **Next Task** | P2.1 — MarkdownParser (Physical Topology) |
-| **Active Worktree** | `worktrees/foundation/` (branch: `wt/foundation`) |
+| **Phase** | P2 — Physical Topology (P2.1-P2.4 COMPLETE) |
+| **Tasks Complete** | P2.1 (Parser), P2.2a (CRUD), P2.2b-e (Orchestration), P2.3 (Topology), P2.4 (ValidationV2 + Property + Contract) |
+| **Tests Passing** | 331 (194 existing + 60 orchestration + 30 V2 + 16 property + 31 contract) |
+| **Next Task** | P2.5 (Behavioral/BDD tests) → P2.6 (Integration tests) |
+| **Active Worktree** | `worktrees/stage2/` (branch: `wt/stage2`) |
 | **Active Skills** | test-driven-development, incremental-implementation |
-| **Architectural Gaps Fixed** | TokenType, Full Coverage, Round-trip, BOM, Version, _StructuralGapFiller |
+| **Architectural Decisions** | 5-phase orchestration pipeline, Pydantic intermediates (DetectedLayersReport → HierarchyTree → PhysicalComponents → Stage2Output), CRUD modularization, auto-registration, 6-check validation gate (V2.1-V2.6) |
 
 ---
 
@@ -189,7 +189,7 @@ Each stage has its own git worktree + branch for true isolation and parallel dev
 |----------|--------|--------|----------|
 | `foundation/` | `wt/foundation` | ✅ Active | Core + Schemas + Stage 1 (COMPLETE, 455 tests) |
 | `stage1/` | `wt/stage1` | ❌ Empty | To be populated with Stage 1 code |
-| `stage2/` | `wt/stage2` | ❌ Empty | Future: Physical Topology (P2) |
+| `stage2/` | `wt/stage2` | 🔧 Active | Physical Topology: Parser + CRUD (10 types) + 10 Detectors + Orchestration (Classifier/Hierarchy/Mapper/TokenSpan/Topology) + ValidationV2 + Property/Contract tests (331 tests) |
 | `stage3/` | `wt/stage3` | ❌ Empty | Future: Semantic Topology (P3) |
 | `stage4/` | `wt/stage4` | ❌ Empty | Future: Aggregation (P4) |
 | `orchestrator/` | `wt/orchestrator` | ❌ Empty | Future: LangGraph orchestration (P5) |

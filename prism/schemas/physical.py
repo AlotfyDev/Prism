@@ -13,7 +13,7 @@ class NodeType(str, Enum):
     """AST node types produced by MarkdownItParser.
 
     Maps to LayerType for physical topology classification.
-    Inline, HR, and LIST_ITEM are parser-level concepts, not physical layers.
+    Inline, HR, LIST_ITEM, METADATA, and FOOTNOTE are parser-level concepts, not physical layers.
     """
 
     HEADING = "heading"
@@ -25,6 +25,8 @@ class NodeType(str, Enum):
     BLOCKQUOTE = "blockquote"
     HR = "hr"
     INLINE = "inline"
+    METADATA = "metadata"
+    FOOTNOTE = "footnote"
 
     def to_layer_type(self) -> Optional[LayerType]:
         """Convert NodeType to LayerType if applicable.
@@ -41,6 +43,8 @@ class NodeType(str, Enum):
             NodeType.BLOCKQUOTE: LayerType.BLOCKQUOTE,
             NodeType.HR: None,
             NodeType.INLINE: None,
+            NodeType.METADATA: LayerType.METADATA,
+            NodeType.FOOTNOTE: LayerType.FOOTNOTE,
         }
         return mapping.get(self)
 
@@ -416,6 +420,117 @@ class DetectedLayersReport(BaseModel):
         return {lt.value: len(instances) for lt, instances in self.instances.items()}
 
 
+class HierarchyNode(BaseModel):
+    """A node in the component hierarchy tree.
+
+    Produced by HierarchyBuilder (Stage 2.2c). Links a LayerInstance
+    to its parent and children within the validated hierarchy.
+    """
+
+    instance: LayerInstance = Field(
+        ...,
+        description="The layer instance at this hierarchy position",
+    )
+    children: list["HierarchyNode"] = Field(
+        default_factory=list,
+        description="Child hierarchy nodes (validated against NestingMatrix)",
+    )
+
+    @property
+    def component_id(self) -> str:
+        """Stable ID derived from layer type and position."""
+        return f"{self.instance.layer_type.value}:depth{self.instance.depth}_sib{self.instance.sibling_index}"
+
+    @property
+    def depth(self) -> int:
+        """Tree depth (root = 0)."""
+        return self.instance.depth
+
+    @property
+    def is_leaf(self) -> bool:
+        return len(self.children) == 0
+
+
+HierarchyNode.model_rebuild()
+
+
+class HierarchyTree(BaseModel):
+    """Root-level hierarchy tree of all detected layer instances.
+
+    Produced by HierarchyBuilder (Stage 2.2c). Validates parent-child
+    relationships against NestingMatrix and assigns component IDs.
+
+    Consumed by ComponentMapper (Stage 2.2d) to produce typed components.
+    """
+
+    root_nodes: list[HierarchyNode] = Field(
+        default_factory=list,
+        description="Root-level hierarchy nodes (depth=0)",
+    )
+    total_nodes: int = Field(
+        default=0,
+        ge=0,
+        description="Total number of nodes in the tree (computed)",
+    )
+    max_depth: int = Field(
+        default=0,
+        ge=0,
+        description="Maximum nesting depth in the tree (computed)",
+    )
+
+    @model_validator(mode="after")
+    def compute_tree_properties(self) -> "HierarchyTree":
+        """Count total nodes and compute max depth."""
+        count = 0
+        max_d = 0
+
+        def _walk(node: HierarchyNode) -> None:
+            nonlocal count, max_d
+            count += 1
+            max_d = max(max_d, node.depth)
+            for child in node.children:
+                _walk(child)
+
+        for root in self.root_nodes:
+            _walk(root)
+
+        self.total_nodes = count
+        self.max_depth = max_d
+        return self
+
+    def flatten(self) -> list[LayerInstance]:
+        """Return all LayerInstance objects in tree order."""
+        result: list[LayerInstance] = []
+
+        def _walk(node: HierarchyNode) -> None:
+            result.append(node.instance)
+            for child in node.children:
+                _walk(child)
+
+        for root in self.root_nodes:
+            _walk(root)
+
+        return result
+
+    def get_node_by_id(self, target_id: str) -> Optional[HierarchyNode]:
+        """Find a node by its component_id."""
+
+        def _walk(nodes: list[HierarchyNode]) -> Optional[HierarchyNode]:
+            for node in nodes:
+                if node.component_id == target_id:
+                    return node
+                result = _walk(node.children)
+                if result:
+                    return result
+            return None
+
+        return _walk(self.root_nodes)
+
+
+# =============================================================================
+# PHYSICAL COMPONENT — typed layer components
+# =============================================================================
+
 _COMPONENT_ID_PATTERN = re.compile(r"^[a-z_]+:.+$")
 
 
@@ -753,8 +868,13 @@ class Stage2Output(BaseModel):
 
     @model_validator(mode="after")
     def build_component_to_tokens(self) -> "Stage2Output":
-        """Build component_to_tokens mapping from discovered_layers."""
-        self.component_to_tokens = {}
+        """Build component_to_tokens mapping from discovered_layers.
+
+        Only derives from component.token_span when component_to_tokens
+        was not pre-populated (e.g., by TopologyBuilder via TokenSpanMapper).
+        """
+        if self.component_to_tokens:
+            return self
         for comp_id, comp in self.discovered_layers.items():
             if comp.token_span is not None:
                 self.component_to_tokens[comp_id] = comp.token_span
