@@ -15,6 +15,7 @@ from prism.schemas.physical import (
     NESTING_MATRIX,
     TopologyConfig,
 )
+from prism.stage2.pipeline_models import HierarchyInput
 
 
 class HierarchyBuilder:
@@ -23,7 +24,7 @@ class HierarchyBuilder:
     Takes the flat DetectedLayersReport and organizes instances into a
     tree structure using NestingMatrix rules.
 
-    Input:  DetectedLayersReport + NestingMatrix + TopologyConfig
+    Input:  HierarchyInput (DetectedLayersReport)
     Output: HierarchyTree
     """
 
@@ -44,30 +45,23 @@ class HierarchyBuilder:
     def name(self) -> str:
         return "HierarchyBuilder"
 
+    def process(
+        self,
+        input_data: HierarchyInput,
+        config: Optional[TopologyConfig] = None,
+    ) -> HierarchyTree:
+        """Build a hierarchy tree from detected layer instances."""
+        return self.build(input_data.report, config=config)
+
+    # Backward compatibility: legacy build() method
     def build(
         self,
         report: DetectedLayersReport,
         config: Optional[TopologyConfig] = None,
     ) -> HierarchyTree:
-        """Build a hierarchy tree from detected layer instances.
-
-        Algorithm:
-        1. Collect all instances sorted by char_start
-        2. Build parent-child relationships using char range containment
-        3. Validate against NestingMatrix rules
-        4. Detect cycles and enforce depth limits
-        5. Return HierarchyTree
-
-        Args:
-            report: DetectedLayersReport from LayerClassifier.
-            config: Optional topology config (nesting_depth_limit).
-
-        Returns:
-            HierarchyTree with validated parent-child relationships.
-        """
+        """Build a hierarchy tree from detected layer instances."""
         depth_limit = config.nesting_depth_limit if config else 10
 
-        # Collect all instances sorted by char_start
         all_instances = []
         for instances in report.instances.values():
             all_instances.extend(instances)
@@ -76,19 +70,14 @@ class HierarchyBuilder:
         if not all_instances:
             return HierarchyTree()
 
-        # Build parent-child relationships using char range containment
-        # An instance A is a child of B if:
-        #   - A.char_start >= B.char_start and A.char_end <= B.char_end
-        #   - B is the smallest such container (immediate parent)
         nodes: list[HierarchyNode] = []
-        node_by_instance: dict[int, HierarchyNode] = {}  # id(inst) -> node
+        node_by_instance: dict[int, HierarchyNode] = {}
 
         for inst in all_instances:
             node = HierarchyNode(instance=inst)
             node_by_instance[id(inst)] = node
             nodes.append(node)
 
-        # Build tree by finding immediate parent for each instance
         root_nodes: list[HierarchyNode] = []
 
         for node in nodes:
@@ -99,7 +88,6 @@ class HierarchyBuilder:
             else:
                 parent.children.append(node)
 
-        # Validate the tree
         self._validate_tree(root_nodes, depth_limit)
 
         return HierarchyTree(root_nodes=root_nodes)
@@ -110,27 +98,21 @@ class HierarchyBuilder:
         all_nodes: list[HierarchyNode],
         node_by_instance: dict,
     ) -> Optional[HierarchyNode]:
-        """Find the immediate (smallest) parent that contains this instance.
-
-        Uses char range containment: parent must fully contain child.
-        """
+        """Find the immediate (smallest) parent that contains this instance."""
         candidates: list[tuple[int, HierarchyNode]] = []
 
         for other in all_nodes:
             if other.instance is instance:
                 continue
 
-            # Check containment: other must fully contain instance
             if (
                 other.instance.char_start <= instance.char_start
                 and other.instance.char_end >= instance.char_end
             ):
-                # Check NestingMatrix allows this parent-child relationship
                 if self.nesting_matrix.can_contain(
                     other.instance.layer_type,
                     instance.layer_type,
                 ):
-                    # Compute containment size (smaller = more immediate)
                     containment_size = (
                         other.instance.char_end - other.instance.char_start
                     )
@@ -139,7 +121,6 @@ class HierarchyBuilder:
         if not candidates:
             return None
 
-        # Return the smallest container (most immediate parent)
         candidates.sort(key=lambda x: x[0])
         return candidates[0][1]
 
@@ -152,14 +133,12 @@ class HierarchyBuilder:
         for node in nodes:
             inst = node.instance
 
-            # Check depth limit
             if inst.depth > depth_limit:
                 raise ValueError(
                     f"Nesting depth {inst.depth} exceeds limit {depth_limit} "
                     f"for {inst.layer_type.value} at char {inst.char_start}"
                 )
 
-            # Validate children against nesting matrix
             for child in node.children:
                 if not self.nesting_matrix.can_contain(
                     inst.layer_type,
@@ -170,23 +149,26 @@ class HierarchyBuilder:
                         f"{child.instance.layer_type.value}"
                     )
 
-            # Recurse
             self._validate_tree(node.children, depth_limit)
+
+    # ------------------------------------------------------------------
+    # Validation: primary signatures (type-safe)
+    # ------------------------------------------------------------------
 
     def validate_input(
         self,
-        report: DetectedLayersReport,
+        input_data: HierarchyInput,
     ) -> tuple[bool, str]:
         """Verify report has non-empty source text."""
-        if not report.source_text.strip():
+        if not input_data.report.source_text.strip():
             return False, "source_text is empty"
         return True, ""
 
     def validate_output(
         self,
-        tree: HierarchyTree,
+        output_data: HierarchyTree,
     ) -> tuple[bool, str]:
         """Verify tree is valid."""
-        if tree.total_nodes == 0:
+        if output_data.total_nodes == 0:
             return False, "Hierarchy tree is empty"
         return True, ""

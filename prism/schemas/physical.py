@@ -169,6 +169,11 @@ _LEAF_TYPES: frozenset[LayerType] = frozenset({
     LayerType.DIAGRAM,
     LayerType.FIGURE,
     LayerType.METADATA,
+    LayerType.INLINE_CODE,
+    LayerType.EMPHASIS,
+    LayerType.LINK,
+    LayerType.HTML_BLOCK,
+    LayerType.HTML_INLINE,
 })
 
 # Container types: can contain children, with max_depth limits
@@ -183,36 +188,54 @@ _CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
             LayerType.DIAGRAM,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
         },
-        1,  # heading cannot contain another heading
+        1,
     ),
     LayerType.PARAGRAPH: (
-        {LayerType.FIGURE},  # inline images only
+        {
+            LayerType.FIGURE,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
+        },
         1,
     ),
     LayerType.LIST: (
         {
             LayerType.PARAGRAPH,
-            LayerType.LIST,       # recursive: sub-lists
+            LayerType.LIST,
             LayerType.TABLE,
             LayerType.CODE_BLOCK,
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
             LayerType.DIAGRAM,
             LayerType.HEADING,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
         },
-        -1,  # unlimited sub-list depth
+        -1,
     ),
     LayerType.TABLE: (
         {
             LayerType.PARAGRAPH,
             LayerType.LIST,
-            LayerType.TABLE,       # nested tables in cells
+            LayerType.TABLE,
             LayerType.CODE_BLOCK,
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
             LayerType.DIAGRAM,
             LayerType.HEADING,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
         },
         1,
     ),
@@ -223,13 +246,25 @@ _CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
             LayerType.LIST,
             LayerType.TABLE,
             LayerType.CODE_BLOCK,
-            LayerType.BLOCKQUOTE,  # recursive: nested quotes
+            LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
+            LayerType.HTML_BLOCK,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
         },
-        -1,  # unlimited quote nesting
+        -1,
     ),
     LayerType.FOOTNOTE: (
-        {LayerType.PARAGRAPH, LayerType.FIGURE},
+        {
+            LayerType.PARAGRAPH,
+            LayerType.FIGURE,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
+        },
         1,
     ),
 }
@@ -538,6 +573,8 @@ class PhysicalComponent(BaseModel):
     """A discovered physical layer component (paragraph, table, list, etc.).
 
     Component IDs follow the pattern `{layer_type}:{identifier}`.
+    Char offsets are transferred from LayerInstance to enable
+    TokenSpanMapper to map components to global token IDs.
     """
 
     component_id: str = Field(
@@ -553,9 +590,19 @@ class PhysicalComponent(BaseModel):
         min_length=1,
         description="Raw Markdown content of this component",
     )
+    char_start: int = Field(
+        ...,
+        ge=0,
+        description="Character offset in source text (start, inclusive). Transferred from LayerInstance.",
+    )
+    char_end: int = Field(
+        ...,
+        ge=0,
+        description="Character offset in source text (end, exclusive). Transferred from LayerInstance.",
+    )
     token_span: Optional[tuple[int, int]] = Field(
         default=None,
-        description="Global token ID range (start, end) inclusive",
+        description="Global token ID range (start, end) inclusive. Populated by TokenSpanMapper.",
     )
     parent_id: Optional[str] = Field(
         default=None,
@@ -569,6 +616,14 @@ class PhysicalComponent(BaseModel):
         default_factory=dict,
         description="Extra attributes (e.g., heading level, list style)",
     )
+
+    @model_validator(mode="after")
+    def validate_char_offsets(self) -> "PhysicalComponent":
+        if self.char_end <= self.char_start:
+            raise ValueError(
+                f"char_end ({self.char_end}) must be > char_start ({self.char_start})"
+            )
+        return self
 
     @field_validator("component_id")
     @classmethod
@@ -590,6 +645,10 @@ class PhysicalComponent(BaseModel):
         return self
 
     @property
+    def char_length(self) -> int:
+        return self.char_end - self.char_start
+
+    @property
     def token_range(self) -> tuple[int, int]:
         if self.token_span is None:
             raise ValueError("token_span not set")
@@ -601,6 +660,249 @@ class PhysicalComponent(BaseModel):
             return 0
         start, end = self.token_span
         return max(0, end - start + 1)
+
+
+# =============================================================================
+# TYPED COMPONENT MODELS — One per LayerType (P2.6)
+# =============================================================================
+
+
+class EmphasisType(str, Enum):
+    """Type of emphasis detected."""
+
+    BOLD = "bold"
+    ITALIC = "italic"
+    STRIKETHROUGH = "strikethrough"
+    BOLD_ITALIC = "bold_italic"
+
+
+class LinkType(str, Enum):
+    """Type of link detected."""
+
+    INLINE = "inline"
+    REFERENCE = "reference"
+    IMAGE = "image"
+    AUTO = "auto"
+
+
+class HeadingComponent(PhysicalComponent):
+    """A heading physical component with level and text."""
+
+    level: int = Field(
+        ...,
+        ge=1,
+        le=6,
+        description="Heading level (1-6)",
+    )
+    text: str = Field(
+        ...,
+        min_length=1,
+        description="Heading text without markdown symbols",
+    )
+    anchor_id: Optional[str] = Field(
+        default=None,
+        description="Generated anchor ID for the heading",
+    )
+
+
+class ParagraphComponent(PhysicalComponent):
+    """A paragraph physical component."""
+
+    word_count: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Word count of the paragraph",
+    )
+
+
+class CodeBlockComponent(PhysicalComponent):
+    """A code block physical component with language info."""
+
+    language: Optional[str] = Field(
+        default=None,
+        description="Programming language of the code block",
+    )
+    has_lines: bool = Field(
+        default=False,
+        description="Whether line numbers are shown",
+    )
+
+
+class DiagramComponent(PhysicalComponent):
+    """A diagram physical component (mermaid, graphviz, etc.)."""
+
+    diagram_type: str = Field(
+        ...,
+        min_length=1,
+        description="Diagram type (mermaid, graphviz, etc.)",
+    )
+    title: Optional[str] = Field(
+        default=None,
+        description="Diagram title",
+    )
+
+
+class FootnoteComponent(PhysicalComponent):
+    """A footnote physical component."""
+
+    footnote_id: str = Field(
+        ...,
+        min_length=1,
+        description="Footnote identifier",
+    )
+    has_url: bool = Field(
+        default=False,
+        description="Whether the footnote contains URLs",
+    )
+
+
+class MetadataComponent(PhysicalComponent):
+    """A metadata/front-matter physical component."""
+
+    format: str = Field(
+        ...,
+        description="Metadata format (yaml, toml)",
+    )
+    keys: list[str] = Field(
+        default_factory=list,
+        description="Metadata keys found in front matter",
+    )
+
+
+class FigureComponent(PhysicalComponent):
+    """A figure/image physical component."""
+
+    image_url: str = Field(
+        ...,
+        min_length=1,
+        description="URL or path of the image",
+    )
+    alt_text: str = Field(
+        default="",
+        description="Alt text for the image",
+    )
+    width: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Image width in pixels",
+    )
+    height: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Image height in pixels",
+    )
+
+
+class BlockquoteComponent(PhysicalComponent):
+    """A blockquote physical component."""
+
+    style: str = Field(
+        default="blockquote",
+        description="Blockquote style (blockquote, note, tip, warning, etc.)",
+    )
+    quote_level: int = Field(
+        default=1,
+        ge=1,
+        description="Nesting depth of the blockquote (1 = single >)",
+    )
+    attribution: Optional[str] = Field(
+        default=None,
+        description="Attribution/source of the quote",
+    )
+
+
+class InlineCodeComponent(PhysicalComponent):
+    """An inline code physical component."""
+
+    content: str = Field(
+        ...,
+        min_length=1,
+        description="Code content without backticks",
+    )
+    language_hint: Optional[str] = Field(
+        default=None,
+        description="Hint about the code language",
+    )
+    syntax_category: Optional[str] = Field(
+        default=None,
+        description="Syntax category (variable, function, command, etc.)",
+    )
+
+
+class EmphasisComponent(PhysicalComponent):
+    """An emphasis (bold/italic/strikethrough) physical component."""
+
+    emphasis_type: EmphasisType = Field(
+        ...,
+        description="Type of emphasis",
+    )
+    marker: str = Field(
+        ...,
+        min_length=1,
+        description="Markdown marker used (**, *, __, _, ~~)",
+    )
+
+
+class LinkComponent(PhysicalComponent):
+    """A link physical component."""
+
+    link_type: LinkType = Field(
+        ...,
+        description="Type of link",
+    )
+    text: str = Field(
+        ...,
+        description="Link text or alt text",
+    )
+    url: str = Field(
+        ...,
+        min_length=1,
+        description="Target URL or reference identifier",
+    )
+    is_external: Optional[bool] = Field(
+        default=None,
+        description="Whether the link points to an external resource",
+    )
+    domain: Optional[str] = Field(
+        default=None,
+        description="Domain extracted from the URL",
+    )
+
+
+class HtmlBlockComponent(PhysicalComponent):
+    """An HTML block physical component."""
+
+    tag_name: str = Field(
+        ...,
+        min_length=1,
+        description="HTML tag name",
+    )
+    attributes: dict[str, str] = Field(
+        default_factory=dict,
+        description="HTML attributes as key-value pairs",
+    )
+    is_semantic: bool = Field(
+        default=False,
+        description="Whether the tag is a semantic HTML5 element",
+    )
+
+
+class HtmlInlineComponent(PhysicalComponent):
+    """An HTML inline physical component."""
+
+    tag_name: str = Field(
+        ...,
+        min_length=1,
+        description="HTML tag name",
+    )
+    attributes: dict[str, str] = Field(
+        default_factory=dict,
+        description="HTML attributes as key-value pairs",
+    )
+    is_self_closing: bool = Field(
+        default=False,
+        description="Whether the element is self-closing",
+    )
 
 
 # =============================================================================
@@ -832,8 +1134,36 @@ class Stage2Input(BaseModel):
     config: TopologyConfig = Field(default_factory=TopologyConfig)
 
 
+# =============================================================================
+# TYPED COMPONENT UNION — Union of all 15 typed component models (P2.6)
+# =============================================================================
+
+TypedComponent = (
+    HeadingComponent
+    | ParagraphComponent
+    | CodeBlockComponent
+    | DiagramComponent
+    | FootnoteComponent
+    | MetadataComponent
+    | FigureComponent
+    | BlockquoteComponent
+    | InlineCodeComponent
+    | EmphasisComponent
+    | LinkComponent
+    | HtmlBlockComponent
+    | HtmlInlineComponent
+    | TableComponent
+    | ListComponent
+)
+
+
 class Stage2Output(BaseModel):
-    """Output schema for the physical topology stage."""
+    """Output schema for the physical topology stage.
+
+    ``discovered_layers`` accepts any of the 15 typed component models
+    (all subclasses of PhysicalComponent). The ``TypedComponent`` union
+    type alias is provided for type hints and IDE autocomplete.
+    """
 
     discovered_layers: dict[str, PhysicalComponent] = Field(
         default_factory=dict,

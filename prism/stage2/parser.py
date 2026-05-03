@@ -7,6 +7,7 @@ from markdown_it.token import Token
 
 from prism.schemas.physical import MarkdownNode, NodeType, TopologyConfig
 from prism.schemas.token import Stage1Output
+from prism.stage2.pipeline_models import ParserOutput
 
 
 # Map markdown-it-py token types to our NodeType

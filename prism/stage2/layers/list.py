@@ -34,6 +34,8 @@ class ListCRUD(LayerCRUD[ListComponent]):
         identifier: str,
         raw_content: str,
         style: ListStyle = ListStyle.UNORDERED,
+        char_start: int = 0,
+        char_end: int = 0,
     ) -> ListComponent:
         """Create a new ListComponent.
 
@@ -41,10 +43,14 @@ class ListCRUD(LayerCRUD[ListComponent]):
             identifier: Short ID (e.g. "l1").
             raw_content: Raw Markdown list text.
             style: Ordered or unordered.
+            char_start: Character offset in source text (start, inclusive).
+            char_end: Character offset in source text (end, exclusive).
 
         Returns:
             A new ListComponent.
         """
+        if char_end == 0:
+            char_end = char_start + len(raw_content)
         return ListComponent(
             component_id=f"list:{identifier}",
             layer_type=LayerType.LIST,
@@ -52,6 +58,8 @@ class ListCRUD(LayerCRUD[ListComponent]):
             style=style,
             children=[],
             items=[],
+            char_start=char_start,
+            char_end=char_end,
         )
 
     def add_item(

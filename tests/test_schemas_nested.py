@@ -143,6 +143,8 @@ class TestTableComponent:
             component_id="table:tbl1",
             layer_type=LayerType.TABLE,
             raw_content="| A | B |\n|---|---|\n| 1 | 2 |",
+            char_start=0,
+            char_end=29,
             rows=rows,
             num_cols=num_cols,
             has_header=has_header,
@@ -280,6 +282,8 @@ class TestTableComponent:
             component_id="table:tbl1",
             layer_type=LayerType.TABLE,
             raw_content="| A | B |\n| 1 | 2 |",
+            char_start=0,
+            char_end=21,
             children=["paragraph:p1", "paragraph:p2"],
             rows=[
                 TableRow(
@@ -315,6 +319,8 @@ class TestListComponent:
             component_id="list:l1",
             layer_type=LayerType.LIST,
             raw_content="- Item 1\n- Item 2",
+            char_start=0,
+            char_end=17,
             items=items,
             style=style,
         )
@@ -367,6 +373,8 @@ class TestListComponent:
             component_id="list:l1",
             layer_type=LayerType.LIST,
             raw_content="- Item 1\n  - Sub 1\n  - Sub 2",
+            char_start=0,
+            char_end=29,
             items=[
                 ListItem(
                     item_index=0,
@@ -399,6 +407,10 @@ class TestNestingMatrixTableAndListRules:
             LayerType.FIGURE,
             LayerType.DIAGRAM,
             LayerType.HEADING,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
         }
         actual = matrix.get_valid_children(LayerType.TABLE)
         assert actual == expected_children
@@ -438,6 +450,10 @@ class TestNestingMatrixTableAndListRules:
             LayerType.FIGURE,
             LayerType.DIAGRAM,
             LayerType.HEADING,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
         }
         actual = matrix.get_valid_children(LayerType.LIST)
         assert actual == expected_children

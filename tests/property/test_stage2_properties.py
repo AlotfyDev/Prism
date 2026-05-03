@@ -33,6 +33,7 @@ def physical_components(draw, min_size=1, max_size=10):
     """Generate a list of PhysicalComponent objects."""
     count = draw(st.integers(min_value=min_size, max_value=max_size))
     components = {}
+    char_pos = 0
 
     for i in range(count):
         comp_id, layer_type = draw(valid_component_ids())
@@ -41,11 +42,16 @@ def physical_components(draw, min_size=1, max_size=10):
             comp_id, layer_type = draw(valid_component_ids())
 
         raw_content = draw(st.text(min_size=1, max_size=50, alphabet="abcdefghijklmnopqrstuvwxyz \n\t"))
+        char_start = char_pos
+        char_end = char_pos + len(raw_content)
+        char_pos = char_end
 
         components[comp_id] = PhysicalComponent(
             component_id=comp_id,
             layer_type=layer_type,
             raw_content=raw_content,
+            char_start=char_start,
+            char_end=char_end,
         )
 
     return components
@@ -175,6 +181,8 @@ class TestTokenSpanProperties:
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="text",
                 token_span=(start, end),
+                char_start=0,
+                char_end=4,
             )
             assert comp.token_span == (start, end)
 
@@ -190,6 +198,8 @@ class TestTokenSpanProperties:
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="text",
                     token_span=(10, 5),  # Invalid: end < start
+                    char_start=0,
+                    char_end=4,
                 ),
             },
         )

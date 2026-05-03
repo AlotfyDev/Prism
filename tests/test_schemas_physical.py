@@ -18,6 +18,8 @@ class TestPhysicalComponent:
             component_id="paragraph:p1",
             layer_type=LayerType.PARAGRAPH,
             raw_content="Hello world",
+            char_start=0,
+            char_end=11,
         )
         assert comp.component_id == "paragraph:p1"
         assert comp.layer_type == LayerType.PARAGRAPH
@@ -33,6 +35,8 @@ class TestPhysicalComponent:
             layer_type=LayerType.TABLE,
             raw_content="| A | B |\n| 1 | 2 |",
             token_span=(5, 12),
+            char_start=0,
+            char_end=18,
         )
         assert comp.token_span == (5, 12)
         assert comp.token_range == (5, 12)
@@ -45,6 +49,8 @@ class TestPhysicalComponent:
             raw_content="- item 1\n- item 2",
             children=["list:l1_item1", "list:l1_item2"],
             attributes={"style": "unordered"},
+            char_start=0,
+            char_end=20,
         )
         assert len(comp.children) == 2
         assert comp.attributes["style"] == "unordered"
@@ -55,6 +61,8 @@ class TestPhysicalComponent:
             layer_type=LayerType.PARAGRAPH,
             raw_content="Content under heading",
             parent_id="heading:h1",
+            char_start=0,
+            char_end=23,
         )
         assert comp.parent_id == "heading:h1"
 
@@ -64,6 +72,8 @@ class TestPhysicalComponent:
                 component_id="paragraph_p1",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="text",
+                char_start=0,
+                char_end=4,
             )
 
     def test_invalid_id_empty_identifier(self):
@@ -72,6 +82,8 @@ class TestPhysicalComponent:
                 component_id="paragraph:",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="text",
+                char_start=0,
+                char_end=4,
             )
 
     def test_invalid_id_mismatched_layer_type(self):
@@ -80,6 +92,8 @@ class TestPhysicalComponent:
                 component_id="table:p1",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="text",
+                char_start=0,
+                char_end=4,
             )
 
     def test_invalid_empty_content(self):
@@ -88,6 +102,8 @@ class TestPhysicalComponent:
                 component_id="paragraph:p1",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="",
+                char_start=0,
+                char_end=0,
             )
 
     def test_all_layer_types_valid(self):
@@ -96,6 +112,8 @@ class TestPhysicalComponent:
                 component_id=f"{lt.value}:x1",
                 layer_type=lt,
                 raw_content="test",
+                char_start=0,
+                char_end=4,
             )
             assert comp.layer_type == lt
 
@@ -105,6 +123,8 @@ class TestPhysicalComponent:
             layer_type=LayerType.PARAGRAPH,
             raw_content="test",
             token_span=(-1, 5),
+            char_start=0,
+            char_end=4,
         )
         assert comp.token_span == (-1, 5)
 
@@ -113,6 +133,8 @@ class TestPhysicalComponent:
             component_id="paragraph:p1",
             layer_type=LayerType.PARAGRAPH,
             raw_content="test",
+            char_start=0,
+            char_end=4,
         )
         with pytest.raises(ValueError, match="token_span not set"):
             _ = comp.token_range
@@ -122,6 +144,8 @@ class TestPhysicalComponent:
             component_id="paragraph:p1",
             layer_type=LayerType.PARAGRAPH,
             raw_content="test",
+            char_start=0,
+            char_end=4,
         )
         assert comp.token_count == 0
 
@@ -184,6 +208,8 @@ class TestStage2Output:
             layer_type=LayerType.PARAGRAPH,
             raw_content="Hello",
             token_span=(0, 0),
+            char_start=0,
+            char_end=5,
         )
         output = Stage2Output(discovered_layers={"paragraph:p1": comp})
         assert output.component_count == 1
@@ -198,12 +224,16 @@ class TestStage2Output:
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="Para",
                 token_span=(0, 1),
+                char_start=0,
+                char_end=4,
             ),
             "table:t1": PhysicalComponent(
                 component_id="table:t1",
                 layer_type=LayerType.TABLE,
                 raw_content="|A|B|",
                 token_span=(2, 5),
+                char_start=5,
+                char_end=10,
             ),
         }
         output = Stage2Output(discovered_layers=components)
@@ -217,11 +247,15 @@ class TestStage2Output:
                 component_id="paragraph:p1",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="Para 1",
+                char_start=0,
+                char_end=6,
             ),
             "paragraph:p2": PhysicalComponent(
                 component_id="paragraph:p2",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="Para 2",
+                char_start=7,
+                char_end=13,
             ),
         }
         output = Stage2Output(discovered_layers=components)
@@ -235,11 +269,15 @@ class TestStage2Output:
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="Has span",
                 token_span=(0, 3),
+                char_start=0,
+                char_end=8,
             ),
             "heading:h1": PhysicalComponent(
                 component_id="heading:h1",
                 layer_type=LayerType.HEADING,
                 raw_content="No span",
+                char_start=9,
+                char_end=16,
             ),
         }
         output = Stage2Output(discovered_layers=components)

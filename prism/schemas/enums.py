@@ -16,6 +16,11 @@ class LayerType(str, Enum):
     METADATA = "metadata"
     FIGURE = "figure"
     BLOCKQUOTE = "blockquote"
+    INLINE_CODE = "inline_code"
+    EMPHASIS = "emphasis"
+    LINK = "link"
+    HTML_BLOCK = "html_block"
+    HTML_INLINE = "html_inline"
 
 
 class EntityType(str, Enum):

@@ -12,6 +12,7 @@ from prism.schemas.physical import (
     Stage2Output,
     TopologyConfig,
 )
+from prism.stage2.pipeline_models import TopologyInput
 
 
 class TopologyBuilder:
@@ -21,7 +22,7 @@ class TopologyBuilder:
     objects, computes layer type statistics, and builds the component-to-token
     mapping.
 
-    Input:  list[PhysicalComponent] + dict[str, list[str]] + TopologyConfig
+    Input:  TopologyInput (components + token_mapping)
     Output: Stage2Output
     """
 
@@ -36,6 +37,27 @@ class TopologyBuilder:
     def name(self) -> str:
         return "TopologyBuilder"
 
+    def process(
+        self,
+        input_data: TopologyInput,
+        config: Optional[TopologyConfig] = None,
+    ) -> Stage2Output:
+        """Assemble Stage2Output from components and token mapping.
+
+        Args:
+            input_data: TopologyInput with components and token_mapping.
+            config: Optional topology config.
+
+        Returns:
+            Stage2Output with all discovered layers and mappings.
+        """
+        return self.build(
+            input_data.components,
+            input_data.token_mapping,
+            config=config,
+        )
+
+    # Backward compatibility: legacy build() method
     def build(
         self,
         components: list[PhysicalComponent],
@@ -81,21 +103,24 @@ class TopologyBuilder:
             component_to_tokens=component_to_tokens,
         )
 
+    # ------------------------------------------------------------------
+    # Validation: primary signatures (type-safe)
+    # ------------------------------------------------------------------
+
     def validate_input(
         self,
-        components: list[PhysicalComponent],
-        token_mapping: dict[str, list[str]],
+        input_data: TopologyInput,
     ) -> tuple[bool, str]:
         """Verify inputs are non-empty."""
-        if not components:
+        if not input_data.components:
             return False, "No components to assemble"
         return True, ""
 
     def validate_output(
         self,
-        output: Stage2Output,
+        output_data: Stage2Output,
     ) -> tuple[bool, str]:
         """Verify output has discovered layers."""
-        if output.component_count == 0:
+        if output_data.component_count == 0:
             return False, "Stage2Output has no discovered layers"
         return True, ""

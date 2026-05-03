@@ -24,6 +24,13 @@ from prism.stage2.hierarchy import HierarchyBuilder
 from prism.stage2.mapper import ComponentMapper
 from prism.stage2.token_span import TokenSpanMapper
 from prism.stage2.topology import TopologyBuilder
+from prism.stage2.pipeline_models import (
+    ClassifierInput,
+    HierarchyInput,
+    MapperInput,
+    TokenSpanInput,
+    TopologyInput,
+)
 
 
 # =============================================================================
@@ -101,7 +108,7 @@ class TestLayerClassifier:
         assert classifier.name() == "LayerClassifier"
 
     def test_all_detectors_registered(self):
-        assert len(_ALL_DETECTORS) == 10
+        assert len(_ALL_DETECTORS) == 15
 
     def test_classify_heading(self, classifier, sample_nodes, sample_markdown):
         report = classifier.classify(sample_nodes, sample_markdown)
@@ -139,16 +146,22 @@ class TestLayerClassifier:
         assert report.total_instances == 0
 
     def test_validate_input_valid(self, classifier, sample_nodes, sample_markdown):
-        valid, msg = classifier.validate_input(sample_nodes, sample_markdown)
+        valid, msg = classifier.validate_input(
+            ClassifierInput(nodes=sample_nodes, source_text=sample_markdown)
+        )
         assert valid
 
     def test_validate_input_empty_nodes(self, classifier):
-        valid, msg = classifier.validate_input([], "text")
+        valid, msg = classifier.validate_input(
+            ClassifierInput(nodes=[], source_text="text")
+        )
         assert not valid
         assert "No AST nodes" in msg
 
     def test_validate_input_empty_text(self, classifier, sample_nodes):
-        valid, msg = classifier.validate_input(sample_nodes, "")
+        valid, msg = classifier.validate_input(
+            ClassifierInput(nodes=sample_nodes, source_text="")
+        )
         assert not valid
         assert "empty" in msg
 
@@ -353,12 +366,12 @@ class TestHierarchyBuilder:
 
     def test_validate_input_valid(self, hierarchy_builder):
         report = DetectedLayersReport(source_text="text")
-        valid, msg = hierarchy_builder.validate_input(report)
+        valid, msg = hierarchy_builder.validate_input(HierarchyInput(report=report))
         assert valid
 
     def test_validate_input_empty(self, hierarchy_builder):
         report = DetectedLayersReport(source_text="")
-        valid, msg = hierarchy_builder.validate_input(report)
+        valid, msg = hierarchy_builder.validate_input(HierarchyInput(report=report))
         assert not valid
 
     def test_validate_output_empty(self, hierarchy_builder):
@@ -435,7 +448,7 @@ class TestComponentMapper:
         components = component_mapper.map(tree)
         assert len(components) == 1
         assert components[0].layer_type == LayerType.HEADING
-        assert components[0].attributes.get("level") == "1"
+        assert components[0].level == 1
 
     def test_map_list(self, component_mapper, hierarchy_builder):
         instance = LayerInstance(
@@ -474,7 +487,8 @@ class TestComponentMapper:
         tree = hierarchy_builder.build(report)
         components = component_mapper.map(tree)
         assert len(components) == 1
-        assert components[0].attributes.get("language") == "python"
+        assert components[0].layer_type == LayerType.CODE_BLOCK
+        assert components[0].language == "python"
 
     def test_map_parent_child(self, component_mapper, hierarchy_builder):
         parent = LayerInstance(
@@ -512,11 +526,12 @@ class TestComponentMapper:
 
     def test_validate_input_empty(self, component_mapper):
         tree = HierarchyTree()
-        valid, msg = component_mapper.validate_input(tree)
+        valid, msg = component_mapper.validate_input(MapperInput(tree=tree))
         assert not valid
 
     def test_validate_output_empty(self, component_mapper):
-        valid, msg = component_mapper.validate_output([])
+        from prism.stage2.pipeline_models import MapperOutput
+        valid, msg = component_mapper.validate_output(MapperOutput(components=[]))
         assert not valid
 
 
@@ -566,6 +581,8 @@ class TestTokenSpanMapper:
             layer_type=LayerType.PARAGRAPH,
             raw_content="Hello world.",
             token_span=(0, 3),
+            char_start=0,
+            char_end=12,
         )
         result = token_span_mapper.map([comp], stage1_with_tokens)
         assert "paragraph:p1" in result
@@ -577,12 +594,16 @@ class TestTokenSpanMapper:
             layer_type=LayerType.PARAGRAPH,
             raw_content="Hello world.",
             token_span=(0, 3),
+            char_start=0,
+            char_end=12,
         )
         c2 = PhysicalComponent(
             component_id="paragraph:p2",
             layer_type=LayerType.PARAGRAPH,
             raw_content="Second line",
             token_span=(5, 7),
+            char_start=13,
+            char_end=24,
         )
         result = token_span_mapper.map([c1, c2], stage1_with_tokens)
         assert len(result) == 2
@@ -590,7 +611,9 @@ class TestTokenSpanMapper:
         assert result["paragraph:p2"] == ["T5", "T6", "T7"]
 
     def test_validate_input_empty_components(self, token_span_mapper, stage1_with_tokens):
-        valid, msg = token_span_mapper.validate_input([], stage1_with_tokens)
+        valid, msg = token_span_mapper.validate_input(
+            TokenSpanInput(components=[], stage1_output=stage1_with_tokens)
+        )
         assert not valid
 
     def test_validate_input_empty_tokens(self, token_span_mapper):
@@ -599,13 +622,160 @@ class TestTokenSpanMapper:
             component_id="paragraph:p1",
             layer_type=LayerType.PARAGRAPH,
             raw_content="text",
+            char_start=0,
+            char_end=4,
         )
-        valid, msg = token_span_mapper.validate_input([comp], stage1)
+        valid, msg = token_span_mapper.validate_input(
+            TokenSpanInput(components=[comp], stage1_output=stage1)
+        )
         assert not valid
 
     def test_validate_output_empty(self, token_span_mapper):
-        valid, msg = token_span_mapper.validate_output({})
+        from prism.stage2.pipeline_models import TokenSpanOutput
+        valid, msg = token_span_mapper.validate_output(TokenSpanOutput(component_to_tokens={}))
         assert not valid
+
+    def test_no_overlap(self, token_span_mapper):
+        """Component range [100, 120], all tokens at [0, 24] → returns []."""
+        stage1 = Stage1Output(
+            tokens={
+                "T0": Token(id="T0", text="Hello"),
+                "T1": Token(id="T1", text="world"),
+            },
+            metadata={
+                "T0": TokenMetadata(token_id="T0", char_start=0, char_end=5, source_line=1),
+                "T1": TokenMetadata(token_id="T1", char_start=6, char_end=11, source_line=1),
+            },
+            source_text="Hello world",
+        )
+        comp = PhysicalComponent(
+            component_id="paragraph:p1",
+            layer_type=LayerType.PARAGRAPH,
+            raw_content="distant text",
+            char_start=100,
+            char_end=120,
+        )
+        result = token_span_mapper.map([comp], stage1)
+        assert result["paragraph:p1"] == []
+
+    def test_exact_single_token(self, token_span_mapper):
+        """Component range [5, 10], one token at [5, 10] → returns ["T0"]."""
+        stage1 = Stage1Output(
+            tokens={
+                "T0": Token(id="T0", text="Hello"),
+                "T1": Token(id="T1", text="world"),
+            },
+            metadata={
+                "T0": TokenMetadata(token_id="T0", char_start=5, char_end=10, source_line=1),
+                "T1": TokenMetadata(token_id="T1", char_start=20, char_end=25, source_line=1),
+            },
+            source_text="     Hello          world",
+        )
+        comp = PhysicalComponent(
+            component_id="paragraph:p1",
+            layer_type=LayerType.PARAGRAPH,
+            raw_content="Hello",
+            char_start=5,
+            char_end=10,
+        )
+        result = token_span_mapper.map([comp], stage1)
+        assert result["paragraph:p1"] == ["T0"]
+
+    def test_partial_overlap_start(self, token_span_mapper):
+        """Component [5, 15], token [0, 10] → includes token (intersects)."""
+        stage1 = Stage1Output(
+            tokens={
+                "T0": Token(id="T0", text="HelloWorld"),
+                "T1": Token(id="T1", text="After"),
+            },
+            metadata={
+                "T0": TokenMetadata(token_id="T0", char_start=0, char_end=10, source_line=1),
+                "T1": TokenMetadata(token_id="T1", char_start=20, char_end=25, source_line=1),
+            },
+            source_text="HelloWorld     After",
+        )
+        comp = PhysicalComponent(
+            component_id="paragraph:p1",
+            layer_type=LayerType.PARAGRAPH,
+            raw_content="loWorld",
+            char_start=5,
+            char_end=15,
+        )
+        result = token_span_mapper.map([comp], stage1)
+        assert "T0" in result["paragraph:p1"]
+
+    def test_partial_overlap_end(self, token_span_mapper):
+        """Component [5, 15], token [10, 20] → includes token (intersects)."""
+        stage1 = Stage1Output(
+            tokens={
+                "T0": Token(id="T0", text="Before"),
+                "T1": Token(id="T1", text="TenChars12"),
+            },
+            metadata={
+                "T0": TokenMetadata(token_id="T0", char_start=0, char_end=6, source_line=1),
+                "T1": TokenMetadata(token_id="T1", char_start=10, char_end=20, source_line=1),
+            },
+            source_text="Before     TenChars12",
+        )
+        comp = PhysicalComponent(
+            component_id="paragraph:p1",
+            layer_type=LayerType.PARAGRAPH,
+            raw_content="partial",
+            char_start=5,
+            char_end=15,
+        )
+        result = token_span_mapper.map([comp], stage1)
+        assert "T1" in result["paragraph:p1"]
+
+    def test_multi_token_range(self, token_span_mapper):
+        """Component [0, 24], tokens T0[0,5] T1[5,10] T2[10,19] T3[19,24] → all 4."""
+        stage1 = Stage1Output(
+            tokens={
+                "T0": Token(id="T0", text="Hello"),
+                "T1": Token(id="T1", text="world"),
+                "T2": Token(id="T2", text="Second!"),
+                "T3": Token(id="T3", text="End."),
+            },
+            metadata={
+                "T0": TokenMetadata(token_id="T0", char_start=0, char_end=5, source_line=1),
+                "T1": TokenMetadata(token_id="T1", char_start=5, char_end=10, source_line=1),
+                "T2": TokenMetadata(token_id="T2", char_start=10, char_end=17, source_line=1),
+                "T3": TokenMetadata(token_id="T3", char_start=17, char_end=21, source_line=1),
+            },
+            source_text="HelloworldSecond!End.",
+        )
+        comp = PhysicalComponent(
+            component_id="paragraph:p1",
+            layer_type=LayerType.PARAGRAPH,
+            raw_content="Hello world Second! End.",
+            char_start=0,
+            char_end=21,
+        )
+        result = token_span_mapper.map([comp], stage1)
+        assert result["paragraph:p1"] == ["T0", "T1", "T2", "T3"]
+
+    def test_component_in_gap_between_tokens(self, token_span_mapper):
+        """Component [6, 8], tokens at [0,5] and [10,15] → [] (gap)."""
+        stage1 = Stage1Output(
+            tokens={
+                "T0": Token(id="T0", text="Hello"),
+                "T1": Token(id="T1", text="World"),
+            },
+            metadata={
+                "T0": TokenMetadata(token_id="T0", char_start=0, char_end=5, source_line=1),
+                "T1": TokenMetadata(token_id="T1", char_start=10, char_end=15, source_line=1),
+            },
+            source_text="Hello     World",
+        )
+        comp = PhysicalComponent(
+            component_id="paragraph:p1",
+            layer_type=LayerType.PARAGRAPH,
+            raw_content="  ",
+            char_start=6,
+            char_end=8,
+        )
+        result = token_span_mapper.map([comp], stage1)
+        assert result["paragraph:p1"] == []
 
 
 # =============================================================================
@@ -627,6 +797,8 @@ class TestTopologyBuilder:
             component_id="paragraph:p1",
             layer_type=LayerType.PARAGRAPH,
             raw_content="Hello world.",
+            char_start=0,
+            char_end=12,
         )
         result = topology_builder.build([comp], {})
         assert result.component_count == 1
@@ -637,11 +809,15 @@ class TestTopologyBuilder:
             component_id="heading:h1",
             layer_type=LayerType.HEADING,
             raw_content="# Title",
+            char_start=0,
+            char_end=7,
         )
         c2 = PhysicalComponent(
             component_id="paragraph:p1",
             layer_type=LayerType.PARAGRAPH,
             raw_content="Hello world.",
+            char_start=9,
+            char_end=21,
         )
         result = topology_builder.build([c1, c2], {})
         assert result.component_count == 2
@@ -655,6 +831,8 @@ class TestTopologyBuilder:
             layer_type=LayerType.PARAGRAPH,
             raw_content="Hello world.",
             token_span=(0, 2),
+            char_start=0,
+            char_end=12,
         )
         token_mapping = {
             "paragraph:p1": ["T0", "T1", "T2"],
@@ -668,18 +846,24 @@ class TestTopologyBuilder:
             component_id="paragraph:p1",
             layer_type=LayerType.PARAGRAPH,
             raw_content="First.",
+            char_start=0,
+            char_end=6,
         )
         c2 = PhysicalComponent(
             component_id="paragraph:p2",
             layer_type=LayerType.PARAGRAPH,
             raw_content="Second.",
+            char_start=7,
+            char_end=14,
         )
         result = topology_builder.build([c1, c2], {})
         assert result.is_single_layer
         assert result.layer_types == {LayerType.PARAGRAPH}
 
     def test_validate_input_empty(self, topology_builder):
-        valid, msg = topology_builder.validate_input([], {})
+        valid, msg = topology_builder.validate_input(
+            TopologyInput(components=[], token_mapping={})
+        )
         assert not valid
 
     def test_validate_output_empty(self, topology_builder):

@@ -17,6 +17,9 @@ from prism.schemas.physical import (
     TopologyConfig,
 )
 from prism.stage2.layers import get_crud
+from prism.stage2.pipeline_models import MapperInput, MapperOutput
+
+from typing import Optional
 
 
 class ComponentMapper:
@@ -26,8 +29,8 @@ class ComponentMapper:
     for each layer (TableComponent for tables, ListComponent for lists,
     PhysicalComponent for everything else).
 
-    Input:  HierarchyTree + TopologyConfig
-    Output: list[PhysicalComponent]
+    Input:  MapperInput (HierarchyTree)
+    Output: MapperOutput (list[PhysicalComponent])
     """
 
     @property
@@ -41,6 +44,24 @@ class ComponentMapper:
     def name(self) -> str:
         return "ComponentMapper"
 
+    def process(
+        self,
+        input_data: MapperInput,
+        config: Optional[TopologyConfig] = None,
+    ) -> MapperOutput:
+        """Convert hierarchy nodes to typed PhysicalComponent objects.
+
+        Args:
+            input_data: MapperInput with HierarchyTree.
+            config: Optional topology config.
+
+        Returns:
+            MapperOutput with typed PhysicalComponent objects.
+        """
+        components = self.map(input_data.tree, config=config)
+        return MapperOutput(components=components)
+
+    # Backward compatibility: legacy map() method
     def map(
         self,
         tree: HierarchyTree,
@@ -99,11 +120,15 @@ class ComponentMapper:
 
         # Generate identifier matching the tree's ID format
         identifier = f"depth{inst.depth}_sib{inst.sibling_index}"
+        char_start = inst.char_start
+        char_end = inst.char_end
 
         if inst.layer_type == LayerType.TABLE:
             return crud.create(  # type: ignore[return-value]
                 identifier=identifier,
                 raw_content=inst.raw_content,
+                char_start=char_start,
+                char_end=char_end,
             )
         elif inst.layer_type == LayerType.LIST:
             style = inst.attributes.get("style", "unordered")
@@ -111,6 +136,8 @@ class ComponentMapper:
                 identifier=identifier,
                 raw_content=inst.raw_content,
                 style=style,
+                char_start=char_start,
+                char_end=char_end,
             )
         elif inst.layer_type == LayerType.HEADING:
             level = int(inst.attributes.get("level", "1"))
@@ -118,6 +145,8 @@ class ComponentMapper:
                 identifier=identifier,
                 raw_content=inst.raw_content,
                 level=level,
+                char_start=char_start,
+                char_end=char_end,
             )
         elif inst.layer_type == LayerType.CODE_BLOCK:
             language = inst.attributes.get("language", "")
@@ -125,11 +154,15 @@ class ComponentMapper:
                 identifier=identifier,
                 raw_content=inst.raw_content,
                 language=language,
+                char_start=char_start,
+                char_end=char_end,
             )
         elif inst.layer_type == LayerType.BLOCKQUOTE:
             return crud.create(
                 identifier=identifier,
                 raw_content=inst.raw_content,
+                char_start=char_start,
+                char_end=char_end,
             )
         elif inst.layer_type == LayerType.FOOTNOTE:
             label = inst.attributes.get("label", "")
@@ -137,11 +170,15 @@ class ComponentMapper:
                 identifier=identifier,
                 raw_content=inst.raw_content,
                 label=label,
+                char_start=char_start,
+                char_end=char_end,
             )
         elif inst.layer_type == LayerType.METADATA:
             return crud.create(
                 identifier=identifier,
                 raw_content=inst.raw_content,
+                char_start=char_start,
+                char_end=char_end,
             )
         elif inst.layer_type == LayerType.FIGURE:
             caption = inst.attributes.get("caption", "")
@@ -151,6 +188,8 @@ class ComponentMapper:
                 raw_content=inst.raw_content,
                 caption=caption,
                 src=src,
+                char_start=char_start,
+                char_end=char_end,
             )
         elif inst.layer_type == LayerType.DIAGRAM:
             diagram_type = inst.attributes.get("diagram_type", "")
@@ -158,12 +197,16 @@ class ComponentMapper:
                 identifier=identifier,
                 raw_content=inst.raw_content,
                 diagram_type=diagram_type,
+                char_start=char_start,
+                char_end=char_end,
             )
         else:
             # Default: Paragraph
             return crud.create(
                 identifier=identifier,
                 raw_content=inst.raw_content,
+                char_start=char_start,
+                char_end=char_end,
             )
 
     def _enrich_structured_components(
@@ -320,20 +363,24 @@ class ComponentMapper:
 
         return comp
 
+    # ------------------------------------------------------------------
+    # Validation: primary signatures (type-safe)
+    # ------------------------------------------------------------------
+
     def validate_input(
         self,
-        tree: HierarchyTree,
+        input_data: MapperInput,
     ) -> tuple[bool, str]:
         """Verify tree has nodes."""
-        if tree.total_nodes == 0:
+        if input_data.tree.total_nodes == 0:
             return False, "Hierarchy tree is empty"
         return True, ""
 
     def validate_output(
         self,
-        components: list[PhysicalComponent],
+        output_data: MapperOutput,
     ) -> tuple[bool, str]:
         """Verify output has at least one component."""
-        if not components:
+        if not output_data.components:
             return False, "No components mapped"
         return True, ""

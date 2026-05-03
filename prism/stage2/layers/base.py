@@ -36,6 +36,8 @@ class LayerCRUD(ABC, Generic[ComponentT]):
         self,
         identifier: str,
         raw_content: str,
+        char_start: int = 0,
+        char_end: int = 0,
         **kwargs,
     ) -> ComponentT:
         """Create a new component of this layer type.
@@ -43,6 +45,8 @@ class LayerCRUD(ABC, Generic[ComponentT]):
         Args:
             identifier: Short ID for the component (e.g. "tbl1", "p3").
             raw_content: Raw Markdown text.
+            char_start: Character offset in source text (start, inclusive).
+            char_end: Character offset in source text (end, exclusive).
             **kwargs: Type-specific fields (e.g. rows for TableComponent).
 
         Returns:

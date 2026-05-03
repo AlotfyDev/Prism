@@ -1,26 +1,59 @@
 """Stage 2 — Layer types hub.
 
-Central import point for all layer-specific CRUD operations.
-Each layer type has its own module with:
-  - CRUD operations class (auto-registered with LayerRegistry)
-  - Later: detector class
+Central import point for all layer-specific CRUD operations and detectors.
 
-Import pattern:
-    from prism.stage2.layers import get_crud, LayerRegistry
-    from prism.stage2.layers.table import TableCRUD
-    from prism.stage2.layers import table, list, heading, ...
-
-Usage:
+CRUD usage:
+    from prism.stage2.layers import get_crud
     table_crud = get_crud(LayerType.TABLE)
     t = table_crud.create("tbl1", "| A | B |\\n| 1 | 2 |")
-    table_crud.add_row(t)
+
+Detector contracts and concrete implementations:
+    from prism.stage2.layers import HeadingDetector  # contract (ABC)
+    from prism.stage2.layers import ASTHeadingDetector  # concrete
 """
 
 from prism.schemas.enums import LayerType
 
 from prism.stage2.layers.base import LayerCRUD, LayerRegistry
-
-# Import all layer modules to trigger auto-registration
+from prism.stage2.layers.detectors import (
+    LayerDetector,
+    HeadingDetector,
+    ParagraphDetector,
+    TableDetector,
+    ListDetector,
+    CodeBlockDetector,
+    BlockquoteDetector,
+    MetadataDetector,
+    FootnoteDetector,
+    DiagramDetector,
+    FigureDetector,
+    InlineCodeDetector,
+    EmphasisDetector,
+    LinkDetector,
+    HTMLBlockDetector,
+    HTMLInlineDetector,
+    _walk_ast,
+    _build_instance,
+    _scan_inline_nodes,
+)
+from prism.stage2.layers.specific_detectors import (
+    ASTHeadingDetector,
+    ASTParagraphDetector,
+    ASTTableDetector,
+    ASTBlockquoteDetector,
+    HybridMetadataDetector,
+    UnifiedFootnoteDetector,
+    HeuristicDiagramDetector,
+    RegexFigureDetector,
+    RegexInlineCodeDetector,
+    RegexEmphasisDetector,
+    UnifiedLinkDetector,
+    UnifiedHTMLBlockDetector,
+    UnifiedHTMLInlineDetector,
+    UnifiedCodeBlockDetector,
+    UnifiedListDetector,
+)
+# Import all layer CRUD modules to trigger auto-registration
 from prism.stage2.layers.table import TableCRUD
 from prism.stage2.layers.list import ListCRUD
 from prism.stage2.layers.simple_layers import (
@@ -32,6 +65,11 @@ from prism.stage2.layers.simple_layers import (
     MetadataCRUD,
     FigureCRUD,
     DiagramCRUD,
+    InlineCodeCRUD,
+    EmphasisCRUD,
+    LinkCRUD,
+    HTMLBlockCRUD,
+    HTMLInlineCRUD,
 )
 
 
@@ -44,14 +82,54 @@ def get_crud(layer_type: LayerType) -> LayerCRUD:
 
 
 __all__ = [
-    # Base
+    # Hub
     "LayerCRUD",
     "LayerRegistry",
     "get_crud",
-    # Complex types
+    "LayerDetector",
+    # Contracts (ABCs, one per LayerType)
+    "HeadingDetector",
+    "ParagraphDetector",
+    "TableDetector",
+    "ListDetector",
+    "CodeBlockDetector",
+    "BlockquoteDetector",
+    "MetadataDetector",
+    "FootnoteDetector",
+    "DiagramDetector",
+    "FigureDetector",
+    "InlineCodeDetector",
+    "EmphasisDetector",
+    "LinkDetector",
+    "HTMLBlockDetector",
+    "HTMLInlineDetector",
+    # Concrete implementations (AST-based)
+    "ASTHeadingDetector",
+    "ASTParagraphDetector",
+    "ASTTableDetector",
+    "ASTBlockquoteDetector",
+    # Concrete implementations (Hybrid AST + raw text)
+    "HybridMetadataDetector",
+    # Concrete implementations (Compositional: Prism + mrkdwn_analysis)
+    "UnifiedFootnoteDetector",
+    "UnifiedCodeBlockDetector",
+    "UnifiedListDetector",
+    "UnifiedLinkDetector",
+    "UnifiedHTMLBlockDetector",
+    "UnifiedHTMLInlineDetector",
+    # Concrete implementations (Heuristic)
+    "HeuristicDiagramDetector",
+    # Concrete implementations (Regex inline scanning)
+    "RegexFigureDetector",
+    "RegexInlineCodeDetector",
+    "RegexEmphasisDetector",
+    # Utility functions
+    "_walk_ast",
+    "_build_instance",
+    "_scan_inline_nodes",
+    # CRUDs
     "TableCRUD",
     "ListCRUD",
-    # Simple types
     "HeadingCRUD",
     "ParagraphCRUD",
     "CodeBlockCRUD",
@@ -60,4 +138,9 @@ __all__ = [
     "MetadataCRUD",
     "FigureCRUD",
     "DiagramCRUD",
+    "InlineCodeCRUD",
+    "EmphasisCRUD",
+    "LinkCRUD",
+    "HTMLBlockCRUD",
+    "HTMLInlineCRUD",
 ]

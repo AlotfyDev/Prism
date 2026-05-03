@@ -29,12 +29,16 @@ def valid_output():
                 raw_content="# Title",
                 attributes={"level": "1"},
                 token_span=(0, 2),
+                char_start=0,
+                char_end=7,
             ),
             "paragraph:p1": PhysicalComponent(
                 component_id="paragraph:p1",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="Hello world.",
                 token_span=(3, 7),
+                char_start=9,
+                char_end=21,
             ),
         },
     )
@@ -51,12 +55,16 @@ def output_with_parent_child():
                 raw_content="# Title",
                 attributes={"level": "1"},
                 children=["paragraph:p1"],
+                char_start=0,
+                char_end=7,
             ),
             "paragraph:p1": PhysicalComponent(
                 component_id="paragraph:p1",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="Subtitle text",
                 parent_id="heading:h1",
+                char_start=9,
+                char_end=22,
             ),
         },
     )
@@ -106,6 +114,8 @@ class TestV2_1_ComponentIDValidity:
                 component_id="invalid_id",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="text",
+                char_start=0,
+                char_end=4,
             )
 
     def test_no_colon_cannot_be_created(self, validator):
@@ -116,6 +126,8 @@ class TestV2_1_ComponentIDValidity:
                 component_id="paragraph_p1",
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="text",
+                char_start=0,
+                char_end=4,
             )
 
 
@@ -137,6 +149,8 @@ class TestV2_2_LayerTypeConsistency:
                 component_id="paragraph:h1",
                 layer_type=LayerType.HEADING,
                 raw_content="# Title",
+                char_start=0,
+                char_end=7,
             )
 
 
@@ -158,12 +172,16 @@ class TestV2_3_TokenSpanConsistency:
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Hello world.",
                     token_span=(0, 5),
+                    char_start=0,
+                    char_end=12,
                 ),
                 "paragraph:p2": PhysicalComponent(
                     component_id="paragraph:p2",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Second text.",
                     token_span=(3, 8),
+                    char_start=13,
+                    char_end=25,
                 ),
             },
         )
@@ -180,6 +198,8 @@ class TestV2_3_TokenSpanConsistency:
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Hello",
                     token_span=(5, 2),
+                    char_start=0,
+                    char_end=5,
                 ),
             },
         )
@@ -194,6 +214,8 @@ class TestV2_3_TokenSpanConsistency:
                     component_id="paragraph:p1",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Hello",
+                    char_start=0,
+                    char_end=5,
                 ),
             },
         )
@@ -210,12 +232,16 @@ class TestV2_3_TokenSpanConsistency:
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Hello",
                     token_span=(0, 2),
+                    char_start=0,
+                    char_end=5,
                 ),
                 "paragraph:p2": PhysicalComponent(
                     component_id="paragraph:p2",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="world",
                     token_span=(3, 5),
+                    char_start=6,
+                    char_end=11,
                 ),
             },
         )
@@ -242,6 +268,8 @@ class TestV2_4_ParentChildIntegrity:
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="text",
                     parent_id="heading:nonexistent",
+                    char_start=0,
+                    char_end=4,
                 ),
             },
         )
@@ -258,6 +286,8 @@ class TestV2_4_ParentChildIntegrity:
                     layer_type=LayerType.HEADING,
                     raw_content="# Title",
                     children=["paragraph:nonexistent"],
+                    char_start=0,
+                    char_end=7,
                 ),
             },
         )
@@ -273,12 +303,16 @@ class TestV2_4_ParentChildIntegrity:
                     layer_type=LayerType.HEADING,
                     raw_content="# Title",
                     children=["paragraph:p1"],
+                    char_start=0,
+                    char_end=7,
                 ),
                 "paragraph:p1": PhysicalComponent(
                     component_id="paragraph:p1",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="text",
                     children=["heading:h1"],
+                    char_start=9,
+                    char_end=13,
                 ),
             },
         )
@@ -307,12 +341,16 @@ class TestV2_5_NestingValidation:
                     layer_type=LayerType.CODE_BLOCK,
                     raw_content="```\nsome code\n```",
                     children=["paragraph:p1"],
+                    char_start=0,
+                    char_end=17,
                 ),
                 "paragraph:p1": PhysicalComponent(
                     component_id="paragraph:p1",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="some code",
                     parent_id="code_block:cb1",
+                    char_start=4,
+                    char_end=13,
                 ),
             },
         )
@@ -340,6 +378,8 @@ class TestV2_6_MappingCompleteness:
                     component_id="paragraph:p1",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Hello",
+                    char_start=0,
+                    char_end=5,
                 ),
             },
         )
@@ -358,12 +398,16 @@ class TestV2_6_MappingCompleteness:
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Hello",
                     token_span=(0, 5),
+                    char_start=0,
+                    char_end=5,
                 ),
                 "paragraph:p2": PhysicalComponent(
                     component_id="paragraph:p2",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="World",
                     # No token_span
+                    char_start=6,
+                    char_end=11,
                 ),
             },
         )
@@ -392,6 +436,8 @@ class TestValidationV2Integration:
                     attributes={"level": "1"},
                     token_span=(0, 2),
                     children=["paragraph:p1", "list:l1"],
+                    char_start=0,
+                    char_end=10,
                 ),
                 "paragraph:p1": PhysicalComponent(
                     component_id="paragraph:p1",
@@ -399,6 +445,8 @@ class TestValidationV2Integration:
                     raw_content="Introduction paragraph.",
                     parent_id="heading:h1",
                     token_span=(3, 8),
+                    char_start=12,
+                    char_end=36,
                 ),
                 "list:l1": PhysicalComponent(
                     component_id="list:l1",
@@ -407,6 +455,8 @@ class TestValidationV2Integration:
                     parent_id="heading:h1",
                     token_span=(9, 15),
                     children=["paragraph:p2"],
+                    char_start=38,
+                    char_end=56,
                 ),
                 "paragraph:p2": PhysicalComponent(
                     component_id="paragraph:p2",
@@ -414,6 +464,8 @@ class TestValidationV2Integration:
                     raw_content="Nested paragraph in list.",
                     parent_id="list:l1",
                     token_span=(16, 22),
+                    char_start=58,
+                    char_end=85,
                 ),
                 "code_block:cb1": PhysicalComponent(
                     component_id="code_block:cb1",
@@ -421,6 +473,8 @@ class TestValidationV2Integration:
                     raw_content="```\nprint('hello')\n```",
                     attributes={"language": "python"},
                     token_span=(23, 30),
+                    char_start=87,
+                    char_end=109,
                 ),
             },
             component_to_tokens={
@@ -460,6 +514,8 @@ class TestValidationV2EdgeCases:
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Hello",
                     token_span=(0, 5),
+                    char_start=0,
+                    char_end=5,
                 ),
             },
         )
@@ -474,60 +530,80 @@ class TestValidationV2EdgeCases:
                 layer_type=LayerType.PARAGRAPH,
                 raw_content="Text",
                 token_span=(0, 5),
+                char_start=0,
+                char_end=4,
             ),
             "heading:h1": PhysicalComponent(
                 component_id="heading:h1",
                 layer_type=LayerType.HEADING,
                 raw_content="# Title",
                 token_span=(6, 10),
+                char_start=5,
+                char_end=12,
             ),
             "list:l1": PhysicalComponent(
                 component_id="list:l1",
                 layer_type=LayerType.LIST,
                 raw_content="- item",
                 token_span=(11, 15),
+                char_start=13,
+                char_end=19,
             ),
             "table:t1": PhysicalComponent(
                 component_id="table:t1",
                 layer_type=LayerType.TABLE,
                 raw_content="| A | B |\n| 1 | 2 |",
                 token_span=(16, 25),
+                char_start=20,
+                char_end=36,
             ),
             "code_block:cb1": PhysicalComponent(
                 component_id="code_block:cb1",
                 layer_type=LayerType.CODE_BLOCK,
                 raw_content="```\ncode\n```",
                 token_span=(26, 35),
+                char_start=37,
+                char_end=49,
             ),
             "blockquote:bq1": PhysicalComponent(
                 component_id="blockquote:bq1",
                 layer_type=LayerType.BLOCKQUOTE,
                 raw_content="> quote",
                 token_span=(36, 40),
+                char_start=50,
+                char_end=57,
             ),
             "footnote:fn1": PhysicalComponent(
                 component_id="footnote:fn1",
                 layer_type=LayerType.FOOTNOTE,
                 raw_content="[^1]: note",
                 token_span=(41, 45),
+                char_start=58,
+                char_end=68,
             ),
             "metadata:m1": PhysicalComponent(
                 component_id="metadata:m1",
                 layer_type=LayerType.METADATA,
                 raw_content="---\ntitle: Test\n---",
                 token_span=(46, 50),
+                char_start=69,
+                char_end=87,
             ),
             "figure:f1": PhysicalComponent(
                 component_id="figure:f1",
                 layer_type=LayerType.FIGURE,
                 raw_content="![alt](src)",
                 token_span=(51, 55),
+                char_start=88,
+                char_end=99,
             ),
             "diagram:d1": PhysicalComponent(
                 component_id="diagram:d1",
                 layer_type=LayerType.DIAGRAM,
                 raw_content="```mermaid\ngraph TD\n```",
                 token_span=(56, 60),
+                char_start=100,
+                char_end=122,
             ),
         }
         output = Stage2Output(discovered_layers=layers)
@@ -544,6 +620,8 @@ class TestValidationV2EdgeCases:
                     raw_content="# Title",
                     children=["list:l1"],
                     token_span=(0, 5),
+                    char_start=0,
+                    char_end=7,
                 ),
                 "list:l1": PhysicalComponent(
                     component_id="list:l1",
@@ -552,6 +630,8 @@ class TestValidationV2EdgeCases:
                     parent_id="heading:h1",
                     children=["paragraph:p1"],
                     token_span=(6, 10),
+                    char_start=9,
+                    char_end=15,
                 ),
                 "paragraph:p1": PhysicalComponent(
                     component_id="paragraph:p1",
@@ -559,6 +639,8 @@ class TestValidationV2EdgeCases:
                     raw_content="text",
                     parent_id="list:l1",
                     token_span=(11, 15),
+                    char_start=17,
+                    char_end=21,
                 ),
             },
         )
@@ -574,18 +656,24 @@ class TestValidationV2EdgeCases:
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="First",
                     token_span=(0, 5),
+                    char_start=0,
+                    char_end=5,
                 ),
                 "paragraph:p2": PhysicalComponent(
                     component_id="paragraph:p2",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Second",
                     token_span=(3, 8),
+                    char_start=6,
+                    char_end=12,
                 ),
                 "paragraph:p3": PhysicalComponent(
                     component_id="paragraph:p3",
                     layer_type=LayerType.PARAGRAPH,
                     raw_content="Third",
                     token_span=(6, 12),
+                    char_start=13,
+                    char_end=18,
                 ),
             },
         )

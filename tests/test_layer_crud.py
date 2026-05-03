@@ -69,6 +69,8 @@ class TestBaseLayerCRUD:
             component_id="paragraph:p1",
             layer_type=LayerType.PARAGRAPH,
             raw_content="Hello world",
+            char_start=0,
+            char_end=11,
         )
 
     def test_add_child_valid(self):
@@ -212,7 +214,7 @@ class TestCodeBlockCRUD:
         crud = CodeBlockCRUD()
         c = crud.create("c1", "print('hi')")
         assert c.component_id == "code_block:c1"
-        assert crud.get_language(c) == ""
+        assert crud.get_language(c) is None
 
     def test_create_with_language(self):
         crud = CodeBlockCRUD()

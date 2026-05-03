@@ -29,6 +29,15 @@ from prism.stage2.mapper import ComponentMapper
 from prism.stage2.parser import MarkdownItParser
 from prism.stage2.token_span import TokenSpanMapper
 from prism.stage2.topology import TopologyBuilder
+from prism.stage2.pipeline_models import (
+    ClassifierInput,
+    HierarchyInput,
+    MapperInput,
+    TokenSpanInput,
+    TopologyInput,
+    MapperOutput,
+    TokenSpanOutput,
+)
 from prism.stage2.validation_v2 import ValidationV2
 
 
@@ -171,7 +180,9 @@ class TestClassifierContract:
 
     def test_validate_input_returns_tuple(self, classifier, parser, stage1_output):
         nodes = parser.process(stage1_output)
-        valid, msg = classifier.validate_input(nodes, stage1_output.source_text)
+        valid, msg = classifier.validate_input(
+            ClassifierInput(nodes=nodes, source_text=stage1_output.source_text)
+        )
         assert isinstance(valid, bool)
         assert isinstance(msg, str)
 
@@ -203,7 +214,7 @@ class TestHierarchyBuilderContract:
     def test_validate_input_returns_tuple(self, hierarchy_builder, classifier, parser, stage1_output):
         nodes = parser.process(stage1_output)
         report = classifier.classify(nodes, stage1_output.source_text)
-        valid, msg = hierarchy_builder.validate_input(report)
+        valid, msg = hierarchy_builder.validate_input(HierarchyInput(report=report))
         assert isinstance(valid, bool)
         assert isinstance(msg, str)
 
@@ -240,7 +251,7 @@ class TestComponentMapperContract:
         nodes = parser.process(stage1_output)
         report = classifier.classify(nodes, stage1_output.source_text)
         tree = hierarchy_builder.build(report)
-        valid, msg = component_mapper.validate_input(tree)
+        valid, msg = component_mapper.validate_input(MapperInput(tree=tree))
         assert isinstance(valid, bool)
         assert isinstance(msg, str)
 
@@ -249,7 +260,7 @@ class TestComponentMapperContract:
         report = classifier.classify(nodes, stage1_output.source_text)
         tree = hierarchy_builder.build(report)
         components = component_mapper.map(tree)
-        valid, msg = component_mapper.validate_output(components)
+        valid, msg = component_mapper.validate_output(MapperOutput(components=components))
         assert isinstance(valid, bool)
         assert isinstance(msg, str)
 
@@ -282,7 +293,9 @@ class TestTokenSpanMapperContract:
         report = classifier.classify(nodes, stage1_output.source_text)
         tree = hierarchy_builder.build(report)
         components = component_mapper.map(tree)
-        valid, msg = token_span_mapper.validate_input(components, stage1_output)
+        valid, msg = token_span_mapper.validate_input(
+            TokenSpanInput(components=components, stage1_output=stage1_output)
+        )
         assert isinstance(valid, bool)
         assert isinstance(msg, str)
 
@@ -292,7 +305,9 @@ class TestTokenSpanMapperContract:
         tree = hierarchy_builder.build(report)
         components = component_mapper.map(tree)
         mapping = token_span_mapper.map(components, stage1_output)
-        valid, msg = token_span_mapper.validate_output(mapping)
+        valid, msg = token_span_mapper.validate_output(
+            TokenSpanOutput(component_to_tokens=mapping)
+        )
         assert isinstance(valid, bool)
         assert isinstance(msg, str)
 
@@ -321,7 +336,9 @@ class TestTopologyBuilderContract:
         report = classifier.classify(nodes, stage1_output.source_text)
         tree = hierarchy_builder.build(report)
         components = component_mapper.map(tree)
-        valid, msg = topology_builder.validate_input(components, {})
+        valid, msg = topology_builder.validate_input(
+            TopologyInput(components=components, token_mapping={})
+        )
         assert isinstance(valid, bool)
         assert isinstance(msg, str)
 

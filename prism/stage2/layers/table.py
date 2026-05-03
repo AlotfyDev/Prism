@@ -38,6 +38,8 @@ class TableCRUD(LayerCRUD[TableComponent]):
         raw_content: str,
         has_header: bool = False,
         num_cols: int = 0,
+        char_start: int = 0,
+        char_end: int = 0,
     ) -> TableComponent:
         """Create a new TableComponent.
 
@@ -46,10 +48,14 @@ class TableCRUD(LayerCRUD[TableComponent]):
             raw_content: Raw Markdown table text.
             has_header: Whether first row is a header.
             num_cols: Column count (0 = auto-detect from rows).
+            char_start: Character offset in source text (start, inclusive).
+            char_end: Character offset in source text (end, exclusive).
 
         Returns:
             A new TableComponent.
         """
+        if char_end == 0:
+            char_end = char_start + len(raw_content)
         return TableComponent(
             component_id=f"table:{identifier}",
             layer_type=LayerType.TABLE,
@@ -58,6 +64,8 @@ class TableCRUD(LayerCRUD[TableComponent]):
             num_cols=num_cols,
             children=[],
             rows=[],
+            char_start=char_start,
+            char_end=char_end,
         )
 
     def add_row(
