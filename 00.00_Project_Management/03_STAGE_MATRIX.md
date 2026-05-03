@@ -10,10 +10,14 @@
 | 1.2 | Token Stream Construction | TokenStreamBuilder | Stage1Input (Markdown) + TokenizationConfig | dict[str, Token] | Low |
 | 1.3 | Metadata Indexing | MetadataIndexer | Stage1Output (tokens) + TokenizationConfig | TokenMetadataIndex | Low |
 | 2.0 | Stage 2: Physical Topology Analyzer | - | Stage2Input | Stage2Output | - |
-| 2.1 | Markdown AST Parsing | MarkdownParser | str (Markdown) + TopologyConfig | MarkdownAST | Low |
-| 2.2 | Layer Classification | LayerClassifier | MarkdownAST + TopologyConfig | dict[str, list[PhysicalComponent]] | Medium |
-| 2.3 | Component-Token Mapping | ComponentMapper | list[PhysicalComponent] + Stage1Output + TopologyConfig | dict[str, list[str]] | Medium |
-| 2.4 | Topology Report Assembly | TopologyBuilder | list[PhysicalComponent] + Stage1Output + TopologyConfig | Stage2Output | Low |
+| 2.1 | Markdown AST Parsing | MarkdownParser | str (Markdown) + TopologyConfig | list[MarkdownNode] | Low |
+| 2.2a | Layer Detection (10 types) | Detector × 10 | list[MarkdownNode] + str | list[LayerInstance] | Medium |
+| 2.2b | Layer Classification | LayerClassifier | list[MarkdownNode] + TopologyConfig | DetectedLayersReport | Medium |
+| 2.2c | Hierarchy Building | HierarchyBuilder | DetectedLayersReport + NestingMatrix | HierarchyTree | High |
+| 2.2d | Component Mapping | ComponentMapper | DetectedLayersReport + HierarchyTree | list[PhysicalComponent] | High |
+| 2.2e | Token Span Mapping | TokenSpanMapper | list[PhysicalComponent] + Stage1Output | dict[str, list[str]] | Medium |
+| 2.3 | Topology Assembly | TopologyBuilder | list[PhysicalComponent] + token_spans + TopologyConfig | Stage2Output | Low |
+| 2.4 | Validation V2 | ValidationV2 | Stage2Output | ValidationReport | Medium |
 | 3.0 | Stage 3: Semantic Topology Analyzer (Per Physical Layer) | - | Stage3Input | Stage3Output | - |
 | 3.1 | Topic Detection | TopicDetector | PhysicalComponent + Stage1Output + SemanticConfig | topic_label: str + mini_topics: list[MiniTopic] | Medium |
 | 3.2 | Semantic Paragraph Segmentation | SemanticParagraphSegmenter | PhysicalComponent + topic info + Stage1Output + SemanticConfig | list[SemanticParagraphUnit] | High |
@@ -107,7 +111,21 @@
 ---
 
 ## 2.0 Stage 2: Physical Topology Analyzer
-**Purpose:** Parse Markdown into AST, classify physical layer types, map components to global token IDs, and output PhysicalTopologyReport.
+**Purpose:** Parse Markdown into AST, detect layer types, build hierarchy, convert to typed components, map token spans, and output PhysicalTopologyReport.
+
+### Summary Table (Stage 2 only)
+| Step ID | Stage Name | Processing Unit | Input Type | Output Type | Risk Level |
+|---------|------------|-----------------|------------|-------------|------------|
+| 2.1 | Markdown AST Parsing | MarkdownParser | str (Markdown) + TopologyConfig | list[MarkdownNode] | Low |
+| 2.2a | Layer Detection (10 types) | Detector × 10 | list[MarkdownNode] + str | list[LayerInstance] | Medium |
+| 2.2b | Layer Classification | LayerClassifier | list[MarkdownNode] + TopologyConfig | DetectedLayersReport | Medium |
+| 2.2c | Hierarchy Building | HierarchyBuilder | DetectedLayersReport + NestingMatrix | HierarchyTree | High |
+| 2.2d | Component Mapping | ComponentMapper | DetectedLayersReport + HierarchyTree | list[PhysicalComponent] | High |
+| 2.2e | Token Span Mapping | TokenSpanMapper | list[PhysicalComponent] + Stage1Output | dict[str, list[str]] | Medium |
+| 2.3 | Topology Assembly | TopologyBuilder | list[PhysicalComponent] + Stage1Output | Stage2Output | Low |
+| 2.4 | Validation V2 | ValidationV2 | Stage2Output | ValidationReport | Medium |
+
+---
 
 ### 2.1 Markdown AST Parsing
 #### Sub-Step Details
@@ -116,75 +134,144 @@
 | Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Parse structured Markdown into a standard Abstract Syntax Tree (AST) for layer classification. |
 | Processing Unit | MarkdownParser |
 | Input Schema | str (Markdown text) + TopologyConfig: {layer_types_to_detect: list[str], nesting_depth_limit: int} |
-| Output Schema | MarkdownAST (serializable AST with node types: heading, paragraph, table, list, etc.) |
+| Output Schema | list[MarkdownNode] (serializable AST with node types: heading, paragraph, table, list, etc.) |
 | Swappable Implementations | markdown-it-py, mistune, CommonMark |
-| Critical Operations | 1. Parse Markdown into standard AST. 2. Preserve all structural node types per DEFINE's Physical Layer Types. 3. Return serializable AST for downstream classification. |
+| Critical Operations | 1. Parse Markdown into standard AST. 2. Preserve all structural node types per DEFINE's Physical Layer Types. 3. Return serializable AST with char offsets for downstream classification. |
 
 #### Critical Evaluation
 | Evaluation Point | Result | Reasoning |
 |------------------|--------|-----------|
 | Scope Well-Defined? | Yes | Clear input (Markdown) and output (AST). Explicit parser options. |
 | Inputs Sufficient? | Yes | Markdown text + config (layer types to detect, nesting depth limit). |
-| Outputs Complete? | Yes | AST must include all node types per DEFINE's 10 Physical Layer Types. |
+| Outputs Complete? | Yes | AST includes all node types per DEFINE's 10 Physical Layer Types, plus char offsets. |
 | Swappable Options Adequate? | Yes | All major Python Markdown parsers, covers all required AST node types. |
 | Dependencies | 1.1 (Document Conversion) | Requires Markdown text output. |
 | Risk Level | Low | Mature parsers with well-tested AST outputs. |
 
 ---
 
-### 2.2 Layer Classification
+### 2.2a Layer Detection (10 types)
 #### Sub-Step Details
 | Field | Value |
 |-------|-------|
-| Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Classify AST nodes into DEFINE's Physical Layer Types and instantiate PhysicalComponents. |
-| Processing Unit | LayerClassifier |
-| Input Schema | MarkdownAST + TopologyConfig |
-| Output Schema | dict[str, list[PhysicalComponent]] where PhysicalComponent: {component_id: str, layer_type: str, raw_content: str, token_span: list[str] = None, parent_id: str = None, children: list[str] = None, attributes: dict = {}} |
-| Swappable Implementations | Rule-based classifier, ML-based classifier |
-| Critical Operations | 1. Traverse AST nodes. 2. Classify each node into one of DEFINE's Physical Layer Types. 3. Assign unique component_id per component. 4. Extract raw content for each component. |
+| Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Detect each of the 10 physical layer types in the AST and produce LayerInstance objects with positional metadata. |
+| Processing Unit | 10 × LayerDetector (one per layer type) |
+| Input Schema | list[MarkdownNode] (AST) + str (source_text) |
+| Output Schema | list[LayerInstance] where LayerInstance: {layer_type, char_start, char_end, line_start, line_end, raw_content, depth, sibling_index, parent_id, attributes} |
+| Swappable Implementations | Rule-based detectors (current), ML-based detectors (future), hybrid detectors |
+| Critical Operations | 1. Each detector walks AST independently. 2. Identify nodes matching its layer type. 3. Extract char/line offsets. 4. Return LayerInstance list. 5. 6 direct AST, 2 plugin-based, 2 rule-based detectors. |
 
 #### Critical Evaluation
 | Evaluation Point | Result | Reasoning |
 |------------------|--------|-----------|
-| Scope Well-Defined? | Partially | DEFINE lists 10 layer types, but rule-based classification may miss edge cases (e.g., blockquote containing a list). ML-based classifier has no specified training data or labels. |
-| Inputs Sufficient? | Yes | AST has node types, config specifies which layer types to detect. |
-| Outputs Complete? | No | PhysicalComponent.token_span is not populated here (requires 2.3 ComponentMapper). Output is partial. |
-| Swappable Options Adequate? | No | ML-based classifier is unactionable (no training data/labels). Rule-based is sufficient for Phase 1 but ML option adds no value without supporting artifacts. |
-| Dependencies | 2.1 (Markdown AST Parsing) | Requires AST output. |
-| Risk Level | Medium | Misclassification of layer types (e.g., treating code block as paragraph) propagates to Stage 3, causing incorrect semantic analysis. |
+| Scope Well-Defined? | Yes | Each detector has single responsibility. LayerInstance schema is explicit. Detection methods are clearly categorized (direct/plugin/rule). |
+| Inputs Sufficient? | Yes | AST has node types and char offsets, source_text for fallback scanning. |
+| Outputs Complete? | Yes | LayerInstance contains all fields needed for downstream classification and token mapping. |
+| Swappable Options Adequate? | Yes | Rule-based covers Phase 1. ML-based can be added later without changing output schema. |
+| Dependencies | 2.1 (AST Parsing) | Requires AST output. |
+| Risk Level | Medium | Rule-based detectors may miss edge cases (e.g., ambiguous syntax). Detector conflicts handled by LayerClassifier in 2.2b. |
 
 ---
 
-### 2.3 Component-Token Mapping
+### 2.2b Layer Classification
 #### Sub-Step Details
 | Field | Value |
 |-------|-------|
-| Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Map each PhysicalComponent to its corresponding global token IDs using Stage 1 metadata. |
+| Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Orchestrate all detectors, aggregate results, and produce DetectedLayersReport. |
+| Processing Unit | LayerClassifier |
+| Input Schema | list[MarkdownNode] (AST) + TopologyConfig |
+| Output Schema | DetectedLayersReport (Pydantic) with instances per layer type, detected_types auto-sync, helpers: instances_of(), has_type(), layer_counts() |
+| Swappable Implementations | Single-pass classifier (current), multi-pass classifier with priority resolution (future) |
+| Critical Operations | 1. Traverse AST once. 2. Dispatch each node to all registered detectors. 3. Aggregate LayerInstance results. 4. Build DetectedLayersReport. 5. Validate: no overlapping char ranges, all instances have valid layer types. |
+
+#### Critical Evaluation
+| Evaluation Point | Result | Reasoning |
+|------------------|--------|-----------|
+| Scope Well-Defined? | Yes | Clear orchestration role. Input (AST + config), output (DetectedLayersReport). No component creation here — just detection aggregation. |
+| Inputs Sufficient? | Yes | AST from 2.1, detectors from 2.2a. |
+| Outputs Complete? | Yes | DetectedLayersReport is Pydantic model with all detection results. Token span NOT populated here (requires 2.2e). |
+| Swappable Options Adequate? | Yes | Single-pass is sufficient for Phase 1. Multi-pass for conflict resolution can be added later. |
+| Dependencies | 2.1 (AST), 2.2a (Detectors) | Requires AST output and registered detectors. |
+| Risk Level | Medium | Misclassification propagates to Stage 3. Detector ordering matters for ambiguous cases. |
+
+---
+
+### 2.2c Hierarchy Building
+#### Sub-Step Details
+| Field | Value |
+|-------|-------|
+| Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Build parent-child hierarchy tree from detected layer instances using NestingMatrix validation rules. |
+| Processing Unit | HierarchyBuilder |
+| Input Schema | DetectedLayersReport (from 2.2b) + NestingMatrix (from schemas) + TopologyConfig |
+| Output Schema | HierarchyTree (Pydantic): {root_instances: list[str], parent_map: dict[str, str], children_map: dict[str, list[str]], validated: bool} |
+| Swappable Implementations | Depth-first tree builder (current), topological sort for complex nesting (future) |
+| Critical Operations | 1. Read NestingMatrix rules for valid parent-child relationships. 2. Build tree from char offset nesting (child char range within parent). 3. Assign depth, sibling_index, parent_id. 4. Validate: no cycles, max_depth respected, leaf types have no children. |
+
+#### Critical Evaluation
+| Evaluation Point | Result | Reasoning |
+|------------------|--------|-----------|
+| Scope Well-Defined? | Yes | NestingMatrix provides rules. HierarchyTree output is explicit structure. Validation rules are clear. |
+| Inputs Sufficient? | Yes | DetectedLayersReport has char offsets and layer types. NestingMatrix has parent-child rules. |
+| Outputs Complete? | Yes | HierarchyTree provides parent_map, children_map, and validation status for downstream use. |
+| Swappable Options Adequate? | Yes | Depth-first is sufficient for Markdown nesting. Topological sort for edge cases. |
+| Dependencies | 2.2b (Classification), NestingMatrix schema | Requires detection results and nesting rules. |
+| Risk Level | High | Incorrect hierarchy breaks Stage 3 semantic analysis. NestingMatrix rules must be comprehensive. |
+
+---
+
+### 2.2d Component Mapping
+#### Sub-Step Details
+| Field | Value |
+|-------|-------|
+| Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Convert LayerInstance objects into typed PhysicalComponent/TableComponent/ListComponent using CRUD operations. |
 | Processing Unit | ComponentMapper |
-| Input Schema | list[PhysicalComponent] (from 2.2, without token_span) + Stage1Output (tokens + metadata) + TopologyConfig |
-| Output Schema | dict[str, list[str]] (component ID → list of global token IDs e.g., [T14, T15, ..., T89]) |
-| Swappable Implementations | Char-span mapper, Line-based mapper |
-| Critical Operations | 1. For each component, get char span from raw content. 2. Map char span to global token IDs using Stage1's metadata index. 3. Populate PhysicalComponent.token_span. 4. Handle nested components per nesting_depth_limit. |
+| Input Schema | DetectedLayersReport (from 2.2b) + HierarchyTree (from 2.2c) + TopologyConfig |
+| Output Schema | list[PhysicalComponent] (includes TableComponent, ListComponent as typed subclasses) |
+| Swappable Implementations | CRUD-based mapper (current), factory pattern (future) |
+| Critical Operations | 1. For each LayerInstance, dispatch to correct CRUD via LayerRegistry.get(layer_type). 2. Create typed components. 3. Build Table rows/cells, List items from raw content. 4. Map hierarchy parent-child references. 5. Preserve char/line offsets, depth, sibling_index. |
+
+#### Critical Evaluation
+| Evaluation Point | Result | Reasoning |
+|------------------|--------|-----------|
+| Scope Well-Defined? | Yes | Clear conversion from LayerInstance → PhysicalComponent. CRUD registry provides type-specific creation. |
+| Inputs Sufficient? | Yes | LayerInstance has all data needed. HierarchyTree provides parent-child structure. |
+| Outputs Complete? | Yes | PhysicalComponent with token_span=None (populated in 2.2e), children list, parent_id. |
+| Swappable Options Adequate? | Yes | CRUD-based is modular. Factory pattern for future extensions. |
+| Dependencies | 2.2b (Classification), 2.2c (Hierarchy), LayerRegistry (CRUDs) | Requires detection results, hierarchy, and registered CRUDs. |
+| Risk Level | High | Incorrect component creation (e.g., wrong TableComponent structure) breaks Stage 3. |
+
+---
+
+### 2.2e Token Span Mapping
+#### Sub-Step Details
+| Field | Value |
+|-------|-------|
+| Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Map each PhysicalComponent to its global token ID range using Stage 1 metadata index. |
+| Processing Unit | TokenSpanMapper |
+| Input Schema | list[PhysicalComponent] (from 2.2d) + Stage1Output (tokens + metadata) + TopologyConfig |
+| Output Schema | dict[str, list[str]] (component ID → list of global token IDs e.g., ["T14", "T15", ..., "T89"]) |
+| Swappable Implementations | Char-span mapper (current), Line-based mapper (fallback) |
+| Critical Operations | 1. For each component, get char span from char_start/char_end. 2. Map char span to global token IDs using Stage1 metadata index. 3. Populate PhysicalComponent.token_span. 4. Handle nested components: parent's tokens include all children's tokens. |
 
 #### Critical Evaluation
 | Evaluation Point | Result | Reasoning |
 |------------------|--------|-----------|
 | Scope Well-Defined? | Yes | Explicit mapping from component char spans to global token IDs. |
-| Inputs Sufficient? | Yes | Components have raw content/char spans, Stage1 has token metadata with char offsets. |
+| Inputs Sufficient? | Yes | Components have char offsets, Stage1 has token metadata with char offsets. |
 | Outputs Complete? | Yes | All PhysicalComponents now have token_span populated. |
 | Swappable Options Adequate? | Yes | Char-span is precise, line-based is fallback for simple docs. |
-| Dependencies | 2.2 (Layer Classification), Stage 1 (token metadata) | Requires component list and token metadata. |
+| Dependencies | 2.2d (Component Mapping), Stage 1 (token metadata) | Requires component list and token metadata. |
 | Risk Level | Medium | Char-span mismatches between Markdown parser and token metadata cause orphan tokens or missing tokens. |
 
 ---
 
-### 2.4 Topology Report Assembly
+### 2.3 Topology Assembly
 #### Sub-Step Details
 | Field | Value |
 |-------|-------|
 | Stage Name & Purpose | Stage 2: Physical Topology Analyzer — Assemble final PhysicalTopologyReport from all components and token mappings. |
 | Processing Unit | TopologyBuilder |
-| Input Schema | list[PhysicalComponent] (with token_span) + Stage1Output + TopologyConfig |
+| Input Schema | list[PhysicalComponent] (with token_span) + dict[str, list[str]] (component_to_tokens) + TopologyConfig |
 | Output Schema | Stage2Output: {discovered_layers: dict[str, list[PhysicalComponent]], layer_types: list[str], is_single_layer: bool, component_to_tokens: dict[str, list[str]]} |
 | Swappable Implementations | Tree builder, Flat index builder |
 | Critical Operations | 1. Group components by layer type. 2. Set is_single_layer (True if only paragraphs exist). 3. Build component_to_tokens dict. 4. Validate all tokens are assigned to at least one component (CP2). |
@@ -196,7 +283,7 @@
 | Inputs Sufficient? | Yes | All components and token data available. |
 | Outputs Complete? | Yes | Matches Stage2Output schema exactly. |
 | Swappable Options Adequate? | Yes | Tree builder for nested components, flat for simple docs. |
-| Dependencies | 2.3 (Component-Token Mapping) | Requires completed component list with token spans. |
+| Dependencies | 2.2e (Token Span Mapping) | Requires completed component list with token spans. |
 | Risk Level | Low | Deterministic assembly; validation catches missing tokens. |
 
 ---

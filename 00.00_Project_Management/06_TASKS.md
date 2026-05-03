@@ -405,18 +405,48 @@ python -m venv .venv
 
 ---
 
-### Task P2.2: LayerClassifier
+### Task P2.2a: Detectors (15 layer types)
 
-**Description:** Classify AST nodes into physical layer types (paragraph, table, list, etc.).
+**Description:** Implement 15 detector classes — one per physical layer type. Each detector walks the AST and identifies `LayerInstance` objects for its specific layer type.
 
 **Acceptance Criteria:**
-- [ ] `LayerClassifier` implements `ProcessingUnit`
-- [ ] Traverses AST and classifies each node
-- [ ] Assigns component_id with pattern `{layer_type}:{identifier}`
-- [ ] Extracts raw_content for each component
-- [ ] Builds parent-child hierarchy (nesting)
-- [ ] Detects all 10 layer types: paragraph, list, table, diagram, heading, code_block, footnote, metadata, figure, blockquote
-- [ ] Unit tests with multi-layer Markdown
+- [ ] `LayerDetector` abstract base class with `detect(nodes, source_text) -> list[LayerInstance]`
+- [ ] 15 concrete detectors covering all LayerType values:
+  - 6 direct AST detection (heading, paragraph, table, list, code_block, blockquote)
+  - 2 plugin-based (metadata=front_matter, footnote)
+  - 2 rule-based (diagram=mermaid in code_block, figure=images in inline)
+  - 5 inline regex-scanning (inline_code, emphasis, link, html_block, html_inline)
+- [ ] Each detector registered with `DetectorRegistry` on import
+- [ ] Compositional detectors: UnifiedCodeBlockDetector (AST fenced + native indented), UnifiedListDetector (AST + task items), UnifiedLinkDetector (inline/auto + reference), UnifiedHTMLBlockDetector (CommonMark 7 types), UnifiedHTMLInlineDetector (regex + block filtering)
+- [ ] Unit tests for each detector
+
+**Verify:**
+```bash
+.venv\Scripts\pytest tests/test_stage2_detectors.py -v
+.venv\Scripts\pytest tests/test_inline_detectors.py -v
+```
+
+**Files:**
+- `prism/stage2/layers/detectors.py` — LayerDetector base + utilities
+- `prism/stage2/layers/specific_detectors.py` — All 15 concrete detectors
+- `tests/test_stage2_detectors.py`
+- `tests/test_inline_detectors.py`
+
+**Dependencies:** P2.1
+
+---
+
+### Task P2.2b: LayerClassifier (Orchestrator)
+
+**Description:** `LayerClassifier` is the main ProcessingUnit for Stage 2. Orchestrates all detectors, collects `LayerInstance` results, and produces `DetectedLayersReport`.
+
+**Acceptance Criteria:**
+- [ ] `LayerClassifier` implements `ProcessingUnit[list[MarkdownNode], DetectedLayersReport, TopologyConfig]`
+- [ ] Traverses AST once, dispatches each node to all registered detectors
+- [ ] Aggregates `LayerInstance` results from all detectors
+- [ ] Produces `DetectedLayersReport` (Pydantic) with all detected instances
+- [ ] Auto-syncs `detected_types`, provides `instances_of()`, `has_type()`, `layer_counts()` helpers
+- [ ] Unit tests with multi-layer Markdown documents
 
 **Verify:**
 ```bash
@@ -424,47 +454,101 @@ python -m venv .venv
 ```
 
 **Files:**
-- `prism/stage2/classifier.py`
+- `prism/stage2/classifier.py` — LayerClassifier ProcessingUnit
 - `tests/test_stage2_classifier.py`
 
-**Dependencies:** P2.1
+**Dependencies:** P2.2a
 
 ---
 
-### Task P2.3: ComponentMapper
+### Task P2.2c: HierarchyBuilder
 
-**Description:** Map each PhysicalComponent to its global token ID range using Stage 1 metadata.
+**Description:** Builds parent-child hierarchy tree from detected layer instances using `NestingMatrix` validation rules.
 
 **Acceptance Criteria:**
-- [ ] `ComponentMapper` implements `ProcessingUnit`
-- [ ] For each component, finds char span from raw_content in source_text
-- [ ] Maps char span to global token IDs using Stage1 metadata index
-- [ ] Populates PhysicalComponent.token_span
-- [ ] Handles nested components (parent's tokens include children's tokens)
+- [ ] `HierarchyBuilder` implements `ProcessingUnit[DetectedLayersReport, HierarchyTree, TopologyConfig]`
+- [ ] Reads `NestingMatrix` rules to determine valid parent-child relationships
+- [ ] Builds tree structure with parent references and child lists
+- [ ] Validates: no cycles, max_depth respected, leaf types have no children
+- [ ] Assigns `depth`, `sibling_index`, `parent_id` to each instance
+- [ ] Returns `HierarchyTree` (Pydantic) with validated parent-child structure
+- [ ] Unit tests: valid hierarchies, invalid hierarchies (cycles, depth violations, leaf violations)
+
+**Verify:**
+```bash
+.venv\Scripts\pytest tests/test_stage2_hierarchy.py -v
+```
+
+**Files:**
+- `prism/stage2/hierarchy.py` — HierarchyBuilder + HierarchyTree schema
+- `tests/test_stage2_hierarchy.py`
+
+**Dependencies:** P2.2b
+
+---
+
+### Task P2.2d: ComponentMapper
+
+**Description:** Converts `LayerInstance` objects into typed `PhysicalComponent`/`TableComponent`/`ListComponent` objects using CRUD operations.
+
+**Acceptance Criteria:**
+- [ ] `ComponentMapper` implements `ProcessingUnit[DetectedLayersReport, list[PhysicalComponent], TopologyConfig]`
+- [ ] For each `LayerInstance`, dispatches to correct CRUD via `LayerRegistry.get(layer_type)`
+- [ ] Creates typed components: `PhysicalComponent` for simple types, `TableComponent` for tables, `ListComponent` for lists
+- [ ] Builds structured sub-elements: Table rows/cells, List items
+- [ ] Maps hierarchy parent-child references from string IDs to component references
+- [ ] Transfers `char_start/char_end` from LayerInstance to PhysicalComponent (for TokenSpanMapper)
+- [ ] Unit tests: each layer type produces correct component type, nested structures preserved
+
+**Verify:**
+```bash
+.venv\Scripts\pytest tests/test_stage2_component_mapper.py -v
+```
+
+**Files:**
+- `prism/stage2/mapper.py` — ComponentMapper ProcessingUnit
+- `tests/test_stage2_component_mapper.py`
+
+**Dependencies:** P2.2c
+
+---
+
+### Task P2.2e: TokenSpanMapper
+
+**Description:** Maps each PhysicalComponent to its global token ID range using `char_start/char_end` and Stage 1 metadata index.
+
+**Acceptance Criteria:**
+- [ ] `TokenSpanMapper` implements `ProcessingUnit[list[PhysicalComponent], dict[str, list[str]], TopologyConfig]`
+- [ ] For each component, reads `char_start/char_end` from PhysicalComponent
+- [ ] Maps char range to global token IDs using `Stage1Output.metadata` index (binary search for efficiency)
+- [ ] Populates `PhysicalComponent.token_span` with `(token_start, token_end)` tuple
+- [ ] Handles nested components: parent's token span includes all children's tokens
+- [ ] Handles edge cases: char span overlaps multiple tokens, partial token coverage
 - [ ] Unit tests: verify each component's tokens match expected range
 
 **Verify:**
 ```bash
-.venv\Scripts\pytest tests/test_stage2_mapper.py -v
+.venv\Scripts\pytest tests/test_stage2_token_span.py -v
 ```
 
 **Files:**
-- `prism/stage2/mapper.py`
-- `tests/test_stage2_mapper.py`
+- `prism/stage2/token_span.py` — TokenSpanMapper ProcessingUnit
+- `tests/test_stage2_token_span.py`
 
-**Dependencies:** P2.2 + Stage 1 output
+**Dependencies:** P2.2d + Stage 1 output (token metadata)
 
 ---
 
-### Task P2.4: TopologyBuilder
+### Task P2.3: TopologyBuilder
 
-**Description:** Assemble final PhysicalTopologyReport (Stage2Output) from classified components and token mappings.
+**Description:** Assemble final `Stage2Output` from all components and token mappings.
 
 **Acceptance Criteria:**
-- [ ] `TopologyBuilder` implements `ProcessingUnit`
-- [ ] Groups components by layer type
-- [ ] Sets is_single_layer flag
-- [ ] Builds component_to_tokens dict
+- [ ] `TopologyBuilder` implements `ProcessingUnit[list[PhysicalComponent], Stage2Output, TopologyConfig]`
+- [ ] Groups components by layer type into `discovered_layers` dict
+- [ ] Sets `is_single_layer` flag (True if only paragraphs exist)
+- [ ] Builds `component_to_tokens` dict from token spans
+- [ ] Validates: no empty components, all components have valid IDs, no orphan tokens
 - [ ] Unit tests: verify output schema compliance
 
 **Verify:**
@@ -473,22 +557,26 @@ python -m venv .venv
 ```
 
 **Files:**
-- `prism/stage2/topology.py`
+- `prism/stage2/topology.py` — TopologyBuilder ProcessingUnit
 - `tests/test_stage2_topology.py`
 
-**Dependencies:** P2.3
+**Dependencies:** P2.2e
 
 ---
 
-### Task P2.5: ValidationV2 — Layer Coverage
+### Task P2.4: ValidationV2 — Component Integrity
 
 **Description:** Implement V2 validation checks that run after Stage 2.
 
 **Acceptance Criteria:**
-- [ ] V2.1: All tokens assigned to at least one component
-- [ ] V2.2: No empty components
-- [ ] V2.3: Valid hierarchy (no cycles)
-- [ ] V2.4: Component ID format validation
+- [ ] V2.1: Component ID validity (format: `{layer_type}:{identifier}`)
+- [ ] V2.2: Layer type consistency (component_id prefix matches layer_type field)
+- [ ] V2.3: Token span consistency (no overlaps between sibling components)
+- [ ] V2.4: Parent-child integrity (parent_ids reference existing components, no cycles)
+- [ ] V2.5: Nesting validation (parent-child relationships valid per NestingMatrix)
+- [ ] V2.6: Component-to-token mapping completeness (all components with spans mapped)
+- [ ] Critical severity: V2.1-V2.4 (pipeline halts)
+- [ ] Warning severity: V2.5-V2.6 (structural issues)
 - [ ] Unit tests with valid and invalid Stage2Output
 
 **Verify:**
@@ -497,20 +585,22 @@ python -m venv .venv
 ```
 
 **Files:**
-- `prism/validation/v2_layer_coverage.py`
+- `prism/stage2/validation_v2.py` — ValidationV2
 - `tests/test_validation_v2.py`
 
-**Dependencies:** P2.4
+**Dependencies:** P2.3
 
 ---
 
-### Task P2.6: Behavioral Tests — Stage 2 (Physical Topology)
+### Task P2.5: Behavioral Tests — Stage 2 (Physical Topology)
 
 **Description:** Write BDD feature tests and property-based tests for all Stage 2 Processing Units.
 
 **Acceptance Criteria:**
 - [ ] BDD feature: `LayerClassifier` — detects all layer types, assigns valid component IDs
-- [ ] BDD feature: `ComponentMapper` — maps tokens correctly, handles nesting
+- [ ] BDD feature: `HierarchyBuilder` — builds valid tree, detects cycles, respects nesting rules
+- [ ] BDD feature: `ComponentMapper` — maps instances to typed components, preserves hierarchy
+- [ ] BDD feature: `TokenSpanMapper` — maps tokens correctly, handles nesting
 - [ ] BDD feature: `TopologyBuilder` — assembles valid report, correct is_single_layer flag
 - [ ] BDD feature: `ValidationV2` — detects unassigned tokens, detects cycles
 - [ ] Property test: Every global token appears in at least one component (for complete documents)
@@ -530,7 +620,86 @@ python -m venv .venv
 - `tests/property/test_topology_properties.py`
 - `tests/contract/test_topology_contract.py`
 
-**Dependencies:** P2.5, P0.8
+**Dependencies:** P2.4, P0.8
+
+---
+
+## Phase P2.7: Stage 2 — TokenSpan Integrity Fix
+
+### Task P2.7a: Add char offsets to PhysicalComponent
+
+**Description:** Add `char_start` and `char_end` fields to `PhysicalComponent` model so TokenSpanMapper can map components to global tokens.
+
+**Acceptance Criteria:**
+- [ ] `PhysicalComponent.char_start: int` field added (ge=0)
+- [ ] `PhysicalComponent.char_end: int` field added (gt=char_start)
+- [ ] All 15 typed component models inherit these fields
+- [ ] ComponentMapper transfers `char_start/char_end` from LayerInstance to PhysicalComponent during creation
+- [ ] Existing tests updated to provide char offsets
+- [ ] Schema version bump if applicable
+
+**Verify:**
+```bash
+.venv\Scripts\pytest tests/test_schemas_physical.py -v
+.venv\Scripts\pytest tests/test_schemas_typed_components.py -v
+```
+
+**Files:**
+- `prism/schemas/physical.py` — PhysicalComponent + 15 typed models
+- `prism/stage2/mapper.py` — ComponentMapper (transfer char offsets)
+- `tests/test_schemas_physical.py`
+- `tests/test_schemas_typed_components.py`
+
+**Dependencies:** P2.6 (typed components complete)
+
+---
+
+### Task P2.7b: Reorder TokenSpanMapper in pipeline
+
+**Description:** Ensure `TokenSpanMapper` runs before `TopologyBuilder` and receives `Stage1Output` metadata. Fix pipeline ordering so char→token mapping happens correctly.
+
+**Acceptance Criteria:**
+- [ ] `TopologyBuilder` receives pre-populated token spans from TokenSpanMapper
+- [ ] Pipeline order: ComponentMapper → TokenSpanMapper → TopologyBuilder
+- [ ] `TokenSpanMapper` accepts `Stage1Output` as input (for metadata index)
+- [ ] Integration test: full Stage 2 pipeline produces valid component_to_tokens
+
+**Verify:**
+```bash
+.venv\Scripts\pytest tests/test_stage2_orchestration.py -v
+```
+
+**Files:**
+- `prism/stage2/__init__.py` — exports
+- `prism/stage2/topology.py` — TopologyBuilder (uses pre-mapped spans)
+- `tests/test_stage2_orchestration.py`
+
+**Dependencies:** P2.7a
+
+---
+
+### Task P2.7c: Fix TokenSpanMapper._find_tokens_in_range
+
+**Description:** Rewrite `TokenSpanMapper._find_tokens_in_range` to use component `char_start/char_end` for precise token range lookup via Stage 1 metadata index.
+
+**Acceptance Criteria:**
+- [ ] Uses `component.char_start` and `component.char_end` (not estimated range)
+- [ ] Binary search or sorted scan over Stage1Output.metadata for efficiency
+- [ ] Returns `(token_start_id, token_end_id)` tuple (not list)
+- [ ] Handles components with no token overlap (returns None)
+- [ ] Handles nested components correctly (parent includes children's tokens)
+- [ ] Unit tests with known char ranges → known token IDs
+
+**Verify:**
+```bash
+.venv\Scripts\pytest tests/test_stage2_token_span.py -v
+```
+
+**Files:**
+- `prism/stage2/token_span.py` — TokenSpanMapper (rewrite _find_tokens_in_range)
+- `tests/test_stage2_token_span.py`
+
+**Dependencies:** P2.7a + Stage 1 output (token metadata)
 
 ---
 
@@ -1357,9 +1526,11 @@ P0.1 ──→ P0.2 ──→ P0.3 ──→ P0.4 ──→ P0.5 ──→ P0.6 
                                           │            │
 P0.7 ──→ P1.1 ──→ P1.2 ──→ P1.3 ──→ P1.4 ──→ P1.5     │
                                             │          │
-P1.4 ──→ P2.1 ──→ P2.2 ──→ P2.3 ──→ P2.4 ──→ P2.5 ──→ P2.6
-                                                        │
-P2.6 ──→ P3.1 ──→ P3.2 ──→ P3.3 ──→ P3.4 ──→ P3.5 ──→ P3.6 ──→ P3.7 ──→ P3.8 ──→ P3.9
+P1.4 ──→ P2.1 ──→ P2.2a ──→ P2.2b ──→ P2.2c ──→ P2.2d ──→ P2.2e ──→ P2.3 ──→ P2.4 ──→ P2.5
+                                                                                                                                                           │
+P2.6 (typed components) ──→ P2.7a ──→ P2.7b ──→ P2.7c ───────────────────────────────────────────────────────────────────────────────────────────────────┤
+                                                                                                                                                           │
+P2.5, P2.7c ──→ P3.1 ──→ P3.2 ──→ P3.3 ──→ P3.4 ──→ P3.5 ──→ P3.6 ──→ P3.7 ──→ P3.8 ──→ P3.9
                                                                                           │
 P3.9 ──→ P4.1 ──→ P4.2 ──→ P4.3 ──→ P4.4 ──→ P4.5 ──→ P4.6 ──→ P4.7 ──→ P4.8 ──→ P4.9
                                                                                           │
@@ -1370,7 +1541,7 @@ P0.5 ──→ P5.7 (property-based schemas) ───────────�
                                                                                           │
 P0.6, P0.7, P5.1 ──→ P5.6 (contract tests) ─────────────────────────────────────────────┤
                                                                                           │
-P1.5, P2.6, P3.9, P4.9, P5.1, P5.2, P5.3 ──→ P5.4 (LangGraph Orchestrator)
+P1.5, P2.5, P2.7c, P3.9, P4.9, P5.1, P5.2, P5.3 ──→ P5.4 (LangGraph Orchestrator)
                                               │
 P5.5 (Config) ────────────────────────────────┘
                                               │
@@ -1384,11 +1555,13 @@ P5.4 ──→ P6.1 (CLI) ──→ P6.2 (Benchmarks) ──→ P6.3 (E2E Tests)
 | **P0: Foundation** | 8 tasks | Scaffolding, schemas, abstract interfaces, BDD framework |
 | **P1: Tokenization** | 5 tasks | Document loader, tokenizer, metadata, V1 validation, behavioral tests |
 | **P2: Physical Topology** | 6 tasks | Parser, classifier, mapper, topology builder, V2, behavioral tests |
+| **P2.6: Typed Components** | 5 inline types | InlineCode, Emphasis, Link, HTMLBlock, HTMLInline + 15 typed models + CRUDs + schemas |
+| **P2.7: TokenSpan Fix** | 3 tasks | char offsets on PhysicalComponent, pipeline reorder, TokenSpanMapper rewrite |
 | **P3: Semantic Analysis** | 9 tasks | Topic, segmentation, SRL, NER, coref, relationships, MiniPG, V3, behavioral tests |
 | **P4: Aggregation** | 9 tasks | Cross-layer ER, merge, conflict, linking, clustering, confidence, GlobalPG, V4, behavioral tests |
 | **P5: Infrastructure** | 7 tasks | LLM providers, embeddings, observability, LangGraph orchestrator, config, contract tests, property tests |
 | **P6: CLI & Tests** | 4 tasks | CLI, benchmarks, E2E tests, E2E per stage |
-| **Total** | **48 tasks** | |
+| **Total** | **51 tasks** | |
 
 ## Test Pyramid
 
