@@ -1,8 +1,8 @@
 {
   "repo": "AlotfyDev/Prism",
   "branch": "master",
-  "last_updated": "2026-05-03T19:10:29Z",
-  "file_count": 134,
+  "last_updated": "2026-05-04T06:48:15Z",
+  "file_count": 149,
   "files": [
     {
       "path": ".github/scripts/generate_repo_index.py",
@@ -258,7 +258,7 @@
       "path": "prism/schemas/__init__.py",
       "filename": "__init__.py",
       "extension": "py",
-      "size_bytes": 3069,
+      "size_bytes": 3361,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/schemas/__init__.py",
@@ -268,7 +268,7 @@
       "path": "prism/schemas/enums.py",
       "filename": "enums.py",
       "extension": "py",
-      "size_bytes": 2909,
+      "size_bytes": 3059,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/schemas/enums.py",
@@ -288,7 +288,7 @@
       "path": "prism/schemas/physical.py",
       "filename": "physical.py",
       "extension": "py",
-      "size_bytes": 36760,
+      "size_bytes": 39258,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/schemas/physical.py",
@@ -388,7 +388,7 @@
       "path": "prism/stage2/__init__.py",
       "filename": "__init__.py",
       "extension": "py",
-      "size_bytes": 505,
+      "size_bytes": 3656,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/__init__.py",
@@ -468,7 +468,7 @@
       "path": "prism/stage2/aggregation/rules/codeblock_aggregator.py",
       "filename": "codeblock_aggregator.py",
       "extension": "py",
-      "size_bytes": 5062,
+      "size_bytes": 5094,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/aggregation/rules/codeblock_aggregator.py",
@@ -548,7 +548,7 @@
       "path": "prism/stage2/classifier.py",
       "filename": "classifier.py",
       "extension": "py",
-      "size_bytes": 4669,
+      "size_bytes": 5257,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/classifier.py",
@@ -628,7 +628,7 @@
       "path": "prism/stage2/layers/__init__.py",
       "filename": "__init__.py",
       "extension": "py",
-      "size_bytes": 3723,
+      "size_bytes": 4334,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/layers/__init__.py",
@@ -648,11 +648,31 @@
       "path": "prism/stage2/layers/detectors.py",
       "filename": "detectors.py",
       "extension": "py",
-      "size_bytes": 19886,
+      "size_bytes": 21870,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/layers/detectors.py",
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/prism/stage2/layers/detectors.py"
+    },
+    {
+      "path": "prism/stage2/layers/horizontal_rule.py",
+      "filename": "horizontal_rule.py",
+      "extension": "py",
+      "size_bytes": 3501,
+      "top_level_dir": "prism",
+      "category": "code_or_asset",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/layers/horizontal_rule.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/prism/stage2/layers/horizontal_rule.py"
+    },
+    {
+      "path": "prism/stage2/layers/indented_code_block.py",
+      "filename": "indented_code_block.py",
+      "extension": "py",
+      "size_bytes": 1858,
+      "top_level_dir": "prism",
+      "category": "code_or_asset",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/layers/indented_code_block.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/prism/stage2/layers/indented_code_block.py"
     },
     {
       "path": "prism/stage2/layers/list.py",
@@ -668,7 +688,7 @@
       "path": "prism/stage2/layers/simple_layers.py",
       "filename": "simple_layers.py",
       "extension": "py",
-      "size_bytes": 19327,
+      "size_bytes": 21427,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/layers/simple_layers.py",
@@ -678,7 +698,7 @@
       "path": "prism/stage2/layers/specific_detectors.py",
       "filename": "specific_detectors.py",
       "extension": "py",
-      "size_bytes": 36556,
+      "size_bytes": 40445,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/layers/specific_detectors.py",
@@ -695,10 +715,20 @@
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/prism/stage2/layers/table.py"
     },
     {
+      "path": "prism/stage2/layers/task_list.py",
+      "filename": "task_list.py",
+      "extension": "py",
+      "size_bytes": 10776,
+      "top_level_dir": "prism",
+      "category": "code_or_asset",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/layers/task_list.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/prism/stage2/layers/task_list.py"
+    },
+    {
       "path": "prism/stage2/mapper.py",
       "filename": "mapper.py",
       "extension": "py",
-      "size_bytes": 12859,
+      "size_bytes": 15648,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/mapper.py",
@@ -708,7 +738,7 @@
       "path": "prism/stage2/parser.py",
       "filename": "parser.py",
       "extension": "py",
-      "size_bytes": 9889,
+      "size_bytes": 10618,
       "top_level_dir": "prism",
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/stage2/parser.py",
@@ -805,6 +835,16 @@
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/prism/stage4/__init__.py"
     },
     {
+      "path": "prism/third_party/__init__.py",
+      "filename": "__init__.py",
+      "extension": "py",
+      "size_bytes": 47,
+      "top_level_dir": "prism",
+      "category": "code_or_asset",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/prism/third_party/__init__.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/prism/third_party/__init__.py"
+    },
+    {
       "path": "prism/validation/__init__.py",
       "filename": "__init__.py",
       "extension": "py",
@@ -833,6 +873,36 @@
       "category": "code_or_asset",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/pyproject.toml",
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/pyproject.toml"
+    },
+    {
+      "path": "STAGE2_AGGREGATION_DESIGN.md",
+      "filename": "STAGE2_AGGREGATION_DESIGN.md",
+      "extension": "md",
+      "size_bytes": 30784,
+      "top_level_dir": "STAGE2_AGGREGATION_DESIGN.md",
+      "category": "documentation",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/STAGE2_AGGREGATION_DESIGN.md",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/STAGE2_AGGREGATION_DESIGN.md"
+    },
+    {
+      "path": "STAGE2_GRAPH_DESIGN.md",
+      "filename": "STAGE2_GRAPH_DESIGN.md",
+      "extension": "md",
+      "size_bytes": 21839,
+      "top_level_dir": "STAGE2_GRAPH_DESIGN.md",
+      "category": "documentation",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/STAGE2_GRAPH_DESIGN.md",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/STAGE2_GRAPH_DESIGN.md"
+    },
+    {
+      "path": "STAGE2_PIPELINE_DESIGN.md",
+      "filename": "STAGE2_PIPELINE_DESIGN.md",
+      "extension": "md",
+      "size_bytes": 16586,
+      "top_level_dir": "STAGE2_PIPELINE_DESIGN.md",
+      "category": "documentation",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/STAGE2_PIPELINE_DESIGN.md",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/STAGE2_PIPELINE_DESIGN.md"
     },
     {
       "path": "tests/__init__.py",
@@ -1115,6 +1185,16 @@
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_aggregation_rules/test_topology_assembler.py"
     },
     {
+      "path": "tests/test_footnote_ref.py",
+      "filename": "test_footnote_ref.py",
+      "extension": "py",
+      "size_bytes": 12066,
+      "top_level_dir": "tests",
+      "category": "test",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_footnote_ref.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_footnote_ref.py"
+    },
+    {
       "path": "tests/test_gap_filler.py",
       "filename": "test_gap_filler.py",
       "extension": "py",
@@ -1123,6 +1203,26 @@
       "category": "test",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_gap_filler.py",
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_gap_filler.py"
+    },
+    {
+      "path": "tests/test_horizontal_rule.py",
+      "filename": "test_horizontal_rule.py",
+      "extension": "py",
+      "size_bytes": 9669,
+      "top_level_dir": "tests",
+      "category": "test",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_horizontal_rule.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_horizontal_rule.py"
+    },
+    {
+      "path": "tests/test_indented_code_block.py",
+      "filename": "test_indented_code_block.py",
+      "extension": "py",
+      "size_bytes": 10508,
+      "top_level_dir": "tests",
+      "category": "test",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_indented_code_block.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_indented_code_block.py"
     },
     {
       "path": "tests/test_inline_detectors.py",
@@ -1175,10 +1275,20 @@
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_schemas_global.py"
     },
     {
+      "path": "tests/test_schemas_horizontal_rule.py",
+      "filename": "test_schemas_horizontal_rule.py",
+      "extension": "py",
+      "size_bytes": 6842,
+      "top_level_dir": "tests",
+      "category": "test",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_schemas_horizontal_rule.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_schemas_horizontal_rule.py"
+    },
+    {
       "path": "tests/test_schemas_nested.py",
       "filename": "test_schemas_nested.py",
       "extension": "py",
-      "size_bytes": 15634,
+      "size_bytes": 15936,
       "top_level_dir": "tests",
       "category": "test",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_schemas_nested.py",
@@ -1205,6 +1315,16 @@
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_schemas_semantic.py"
     },
     {
+      "path": "tests/test_schemas_task_list.py",
+      "filename": "test_schemas_task_list.py",
+      "extension": "py",
+      "size_bytes": 9389,
+      "top_level_dir": "tests",
+      "category": "test",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_schemas_task_list.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_schemas_task_list.py"
+    },
+    {
       "path": "tests/test_schemas_tokens.py",
       "filename": "test_schemas_tokens.py",
       "extension": "py",
@@ -1223,6 +1343,16 @@
       "category": "test",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_schemas_typed_components.py",
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_schemas_typed_components.py"
+    },
+    {
+      "path": "tests/test_setext_headings.py",
+      "filename": "test_setext_headings.py",
+      "extension": "py",
+      "size_bytes": 10460,
+      "top_level_dir": "tests",
+      "category": "test",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_setext_headings.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_setext_headings.py"
     },
     {
       "path": "tests/test_stage1_loader.py",
@@ -1303,6 +1433,26 @@
       "category": "test",
       "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_stage2_subgraph.py",
       "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_stage2_subgraph.py"
+    },
+    {
+      "path": "tests/test_task_list_crud.py",
+      "filename": "test_task_list_crud.py",
+      "extension": "py",
+      "size_bytes": 9337,
+      "top_level_dir": "tests",
+      "category": "test",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_task_list_crud.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_task_list_crud.py"
+    },
+    {
+      "path": "tests/test_task_list_detector.py",
+      "filename": "test_task_list_detector.py",
+      "extension": "py",
+      "size_bytes": 8000,
+      "top_level_dir": "tests",
+      "category": "test",
+      "raw_url": "https://raw.githubusercontent.com/AlotfyDev/Prism/master/tests/test_task_list_detector.py",
+      "github_url": "https://github.com/AlotfyDev/Prism/blob/master/tests/test_task_list_detector.py"
     },
     {
       "path": "tests/test_validation_unit.py",
