@@ -148,26 +148,37 @@ def _build_tree(
 
         # Self-closing tokens (hr, fence, code_block)
         if token.type in ("hr", "fence", "code_block"):
-            node_type = _token_to_node_type(token.type)
-            if node_type:
-                char_start, char_end = _compute_char_offsets(tokens, i, source_text)
-                raw = _extract_raw_content(tokens, source_text, i, i + 1)
-                attrs = {}
-                if token.type == "fence":
-                    lang = token.info.strip() if token.info else ""
-                    if lang:
-                        attrs["language"] = lang
-                node = MarkdownNode(
-                    node_type=node_type,
-                    raw_content=raw,
-                    char_start=char_start,
-                    char_end=char_end,
-                    attributes=attrs,
-                )
-                if stack:
-                    stack[-1][0].children.append(node)
-                else:
-                    root_nodes.append(node)
+            char_start, char_end = _compute_char_offsets(tokens, i, source_text)
+            raw = _extract_raw_content(tokens, source_text, i, i + 1)
+            attrs = {}
+            if token.type == "fence":
+                lang = token.info.strip() if token.info else ""
+                if lang:
+                    attrs["language"] = lang
+                node_type = NodeType.CODE_BLOCK
+            elif token.type == "code_block":
+                # Indented code blocks have no markup and no language info
+                is_indented = not getattr(token, "markup", "")
+                node_type = NodeType.INDENTED_CODE_BLOCK if is_indented else NodeType.CODE_BLOCK
+            elif token.type == "hr":
+                node_type = NodeType.HR
+                markup = getattr(token, "markup", "---")
+                if markup:
+                    attrs["markup"] = markup
+            else:
+                node_type = NodeType.CODE_BLOCK
+
+            node = MarkdownNode(
+                node_type=node_type,
+                raw_content=raw,
+                char_start=char_start,
+                char_end=char_end,
+                attributes=attrs,
+            )
+            if stack:
+                stack[-1][0].children.append(node)
+            else:
+                root_nodes.append(node)
             i += 1
             continue
 
@@ -192,6 +203,12 @@ def _build_tree(
             attrs = {}
             if node_type == NodeType.LIST:
                 attrs["style"] = "unordered" if token.tag == "ul" else "ordered"
+            elif node_type == NodeType.HEADING:
+                markup = getattr(token, "markup", "#")
+                if markup and markup in ("=", "-"):
+                    attrs["heading_style"] = "setext"
+                else:
+                    attrs["heading_style"] = "atx"
 
             node = MarkdownNode(
                 node_type=node_type,

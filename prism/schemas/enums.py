@@ -21,6 +21,10 @@ class LayerType(str, Enum):
     LINK = "link"
     HTML_BLOCK = "html_block"
     HTML_INLINE = "html_inline"
+    TASK_LIST = "task_list"
+    HORIZONTAL_RULE = "horizontal_rule"
+    INDENTED_CODE_BLOCK = "indented_code_block"
+    FOOTNOTE_REF = "footnote_ref"
 
 
 class EntityType(str, Enum):

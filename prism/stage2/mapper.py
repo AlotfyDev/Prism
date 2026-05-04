@@ -10,10 +10,15 @@ from prism.schemas.enums import LayerType
 from prism.schemas.physical import (
     HierarchyNode,
     HierarchyTree,
+    HRuleStyle,
+    HorizontalRuleComponent,
+    IndentedCodeBlockComponent,
     ListComponent,
     ListStyle,
     PhysicalComponent,
     TableComponent,
+    TaskItem,
+    TaskListComponent,
     TopologyConfig,
 )
 from prism.stage2.layers import get_crud
@@ -139,12 +144,23 @@ class ComponentMapper:
                 char_start=char_start,
                 char_end=char_end,
             )
+        elif inst.layer_type == LayerType.TASK_LIST:
+            style = inst.attributes.get("style", "unordered")
+            return crud.create(  # type: ignore[return-value]
+                identifier=identifier,
+                raw_content=inst.raw_content,
+                style=style,
+                char_start=char_start,
+                char_end=char_end,
+            )
         elif inst.layer_type == LayerType.HEADING:
             level = int(inst.attributes.get("level", "1"))
+            heading_style = inst.attributes.get("heading_style", "atx")
             return crud.create(
                 identifier=identifier,
                 raw_content=inst.raw_content,
                 level=level,
+                heading_style=heading_style,
                 char_start=char_start,
                 char_end=char_end,
             )
@@ -200,6 +216,31 @@ class ComponentMapper:
                 char_start=char_start,
                 char_end=char_end,
             )
+        elif inst.layer_type == LayerType.HORIZONTAL_RULE:
+            style_str = inst.attributes.get("style", "dash")
+            return crud.create(
+                identifier=identifier,
+                raw_content=inst.raw_content,
+                style=style_str,
+                char_start=char_start,
+                char_end=char_end,
+            )
+        elif inst.layer_type == LayerType.INDENTED_CODE_BLOCK:
+            return crud.create(
+                identifier=identifier,
+                raw_content=inst.raw_content,
+                char_start=char_start,
+                char_end=char_end,
+            )
+        elif inst.layer_type == LayerType.FOOTNOTE_REF:
+            ref_id = inst.attributes.get("ref_id", "")
+            return crud.create(
+                identifier=identifier,
+                raw_content=inst.raw_content,
+                ref_id=ref_id,
+                char_start=char_start,
+                char_end=char_end,
+            )
         else:
             # Default: Paragraph
             return crud.create(
@@ -225,6 +266,9 @@ class ComponentMapper:
                 components[comp_id] = comp
             elif isinstance(comp, ListComponent) and not comp.items:
                 comp = self._parse_list_structure(comp)
+                components[comp_id] = comp
+            elif isinstance(comp, TaskListComponent) and not comp.items:
+                comp = self._parse_task_list_structure(comp)
                 components[comp_id] = comp
 
         return components
@@ -360,6 +404,36 @@ class ComponentMapper:
 
         comp.items = items
         comp.children = []  # Would need token mapping to populate
+
+        return comp
+
+    def _parse_task_list_structure(self, comp: TaskListComponent) -> TaskListComponent:
+        """Parse task list items from raw Markdown content."""
+        import re
+
+        task_re = re.compile(
+            r"^\s*(?:[*\-+]|\d+\.)\s+\[\s*([xX ])\s*\]\s+(.*)$",
+            re.MULTILINE,
+        )
+
+        items = []
+        for i, match in enumerate(task_re.finditer(comp.raw_content)):
+            items.append(
+                TaskItem(
+                    item_index=i,
+                    children=[],
+                    is_checked=match.group(1).lower() == "x",
+                    text=match.group(2).strip(),
+                    char_start=match.start(),
+                    char_end=match.end(),
+                )
+            )
+
+        comp.items = items
+        comp.task_count = len(items)
+        comp.checked_count = sum(1 for item in items if item.is_checked)
+        comp.completion_rate = comp.checked_count / comp.task_count if comp.task_count > 0 else 0.0
+        comp.children = []
 
         return comp
 

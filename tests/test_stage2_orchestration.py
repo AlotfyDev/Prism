@@ -108,7 +108,7 @@ class TestLayerClassifier:
         assert classifier.name() == "LayerClassifier"
 
     def test_all_detectors_registered(self):
-        assert len(_ALL_DETECTORS) == 15
+        assert len(_ALL_DETECTORS) == 18
 
     def test_classify_heading(self, classifier, sample_nodes, sample_markdown):
         report = classifier.classify(sample_nodes, sample_markdown)

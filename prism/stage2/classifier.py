@@ -1,6 +1,6 @@
 """Stage 2.2b: LayerClassifier — orchestrates detectors to produce DetectedLayersReport.
 
-Takes list[MarkdownNode] from MarkdownItParser, dispatches to all 15
+Takes list[MarkdownNode] from MarkdownItParser, dispatches to all 18
 detectors, and assembles a DetectedLayersReport.
 """
 
@@ -28,16 +28,19 @@ from prism.stage2.layers.specific_detectors import (
     UnifiedHTMLBlockDetector,
     UnifiedHTMLInlineDetector,
     UnifiedCodeBlockDetector,
-    UnifiedListDetector,
+    HybridListDetector,
+    ASTHRDetector,
+    ASTIndentedCodeBlockDetector,
+    RegexFootnoteRefDetector,
 )
 from prism.stage2.pipeline_models import ClassifierInput
 
-# All 15 concrete detectors, instantiated once
+# All 18 concrete detectors, instantiated once
 _ALL_DETECTORS: list[LayerDetector] = [
     ASTHeadingDetector(),
     ASTParagraphDetector(),
     ASTTableDetector(),
-    UnifiedListDetector(),
+    HybridListDetector(),
     UnifiedCodeBlockDetector(),
     ASTBlockquoteDetector(),
     HybridMetadataDetector(),
@@ -49,6 +52,9 @@ _ALL_DETECTORS: list[LayerDetector] = [
     UnifiedLinkDetector(),
     UnifiedHTMLBlockDetector(),
     UnifiedHTMLInlineDetector(),
+    ASTHRDetector(),
+    ASTIndentedCodeBlockDetector(),
+    RegexFootnoteRefDetector(),
 ]
 
 
@@ -102,7 +108,15 @@ class LayerClassifier:
 
             detected = detector.detect(nodes, source_text)
             if detected:
-                instances[detector.layer_type] = detected
+                # HybridListDetector may produce both LIST and TASK_LIST
+                # instances; route each to its actual layer_type key
+                for inst in detected:
+                    layer_type = inst.layer_type
+                    if layer_type not in allowed_types:
+                        continue
+                    if layer_type not in instances:
+                        instances[layer_type] = []
+                    instances[layer_type].append(inst)
 
         return DetectedLayersReport(
             source_text=source_text,

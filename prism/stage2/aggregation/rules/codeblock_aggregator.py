@@ -52,7 +52,7 @@ class CodeBlockAggregator:
         """Extract code block indices from AST nodes."""
         results = []
         for node in nodes:
-            if node.node_type == NodeType.CODE_BLOCK:
+            if node.node_type in (NodeType.CODE_BLOCK, NodeType.INDENTED_CODE_BLOCK):
                 code_index = self._parse_single_codeblock(node)
                 results.append(code_index)
             # Recurse into children

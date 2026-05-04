@@ -13,7 +13,7 @@ class NodeType(str, Enum):
     """AST node types produced by MarkdownItParser.
 
     Maps to LayerType for physical topology classification.
-    Inline, HR, LIST_ITEM, METADATA, and FOOTNOTE are parser-level concepts, not physical layers.
+    Inline, LIST_ITEM, METADATA, and FOOTNOTE are parser-level concepts, not physical layers.
     """
 
     HEADING = "heading"
@@ -27,6 +27,7 @@ class NodeType(str, Enum):
     INLINE = "inline"
     METADATA = "metadata"
     FOOTNOTE = "footnote"
+    INDENTED_CODE_BLOCK = "indented_code_block"
 
     def to_layer_type(self) -> Optional[LayerType]:
         """Convert NodeType to LayerType if applicable.
@@ -41,10 +42,11 @@ class NodeType(str, Enum):
             NodeType.LIST_ITEM: None,
             NodeType.CODE_BLOCK: LayerType.CODE_BLOCK,
             NodeType.BLOCKQUOTE: LayerType.BLOCKQUOTE,
-            NodeType.HR: None,
+            NodeType.HR: LayerType.HORIZONTAL_RULE,
             NodeType.INLINE: None,
             NodeType.METADATA: LayerType.METADATA,
             NodeType.FOOTNOTE: LayerType.FOOTNOTE,
+            NodeType.INDENTED_CODE_BLOCK: LayerType.INDENTED_CODE_BLOCK,
         }
         return mapping.get(self)
 
@@ -166,6 +168,7 @@ class LayerInstance(BaseModel):
 # Leaf types: cannot contain any children
 _LEAF_TYPES: frozenset[LayerType] = frozenset({
     LayerType.CODE_BLOCK,
+    LayerType.INDENTED_CODE_BLOCK,
     LayerType.DIAGRAM,
     LayerType.FIGURE,
     LayerType.METADATA,
@@ -174,6 +177,7 @@ _LEAF_TYPES: frozenset[LayerType] = frozenset({
     LayerType.LINK,
     LayerType.HTML_BLOCK,
     LayerType.HTML_INLINE,
+    LayerType.FOOTNOTE_REF,
 })
 
 # Container types: can contain children, with max_depth limits
@@ -183,25 +187,31 @@ _CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
         {
             LayerType.PARAGRAPH,
             LayerType.LIST,
+            LayerType.TASK_LIST,
             LayerType.TABLE,
             LayerType.CODE_BLOCK,
+            LayerType.INDENTED_CODE_BLOCK,
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
             LayerType.DIAGRAM,
+            LayerType.HORIZONTAL_RULE,
             LayerType.INLINE_CODE,
             LayerType.EMPHASIS,
             LayerType.LINK,
             LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
         },
         1,
     ),
     LayerType.PARAGRAPH: (
         {
             LayerType.FIGURE,
+            LayerType.HORIZONTAL_RULE,
             LayerType.INLINE_CODE,
             LayerType.EMPHASIS,
             LayerType.LINK,
             LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
         },
         1,
     ),
@@ -209,16 +219,20 @@ _CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
         {
             LayerType.PARAGRAPH,
             LayerType.LIST,
+            LayerType.TASK_LIST,
             LayerType.TABLE,
             LayerType.CODE_BLOCK,
+            LayerType.INDENTED_CODE_BLOCK,
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
             LayerType.DIAGRAM,
             LayerType.HEADING,
+            LayerType.HORIZONTAL_RULE,
             LayerType.INLINE_CODE,
             LayerType.EMPHASIS,
             LayerType.LINK,
             LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
         },
         -1,
     ),
@@ -226,16 +240,20 @@ _CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
         {
             LayerType.PARAGRAPH,
             LayerType.LIST,
+            LayerType.TASK_LIST,
             LayerType.TABLE,
             LayerType.CODE_BLOCK,
+            LayerType.INDENTED_CODE_BLOCK,
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
             LayerType.DIAGRAM,
             LayerType.HEADING,
+            LayerType.HORIZONTAL_RULE,
             LayerType.INLINE_CODE,
             LayerType.EMPHASIS,
             LayerType.LINK,
             LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
         },
         1,
     ),
@@ -244,15 +262,19 @@ _CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
             LayerType.HEADING,
             LayerType.PARAGRAPH,
             LayerType.LIST,
+            LayerType.TASK_LIST,
             LayerType.TABLE,
             LayerType.CODE_BLOCK,
+            LayerType.INDENTED_CODE_BLOCK,
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
+            LayerType.HORIZONTAL_RULE,
             LayerType.HTML_BLOCK,
             LayerType.INLINE_CODE,
             LayerType.EMPHASIS,
             LayerType.LINK,
             LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
         },
         -1,
     ),
@@ -260,13 +282,39 @@ _CONTAINER_RULES: dict[LayerType, tuple[set[LayerType], int]] = {
         {
             LayerType.PARAGRAPH,
             LayerType.FIGURE,
+            LayerType.TASK_LIST,
+            LayerType.HORIZONTAL_RULE,
             LayerType.INLINE_CODE,
             LayerType.EMPHASIS,
             LayerType.LINK,
             LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
         },
         1,
     ),
+    LayerType.TASK_LIST: (
+        {
+            LayerType.PARAGRAPH,
+            LayerType.LIST,
+            LayerType.TASK_LIST,
+            LayerType.TABLE,
+            LayerType.CODE_BLOCK,
+            LayerType.INDENTED_CODE_BLOCK,
+            LayerType.BLOCKQUOTE,
+            LayerType.FIGURE,
+            LayerType.DIAGRAM,
+            LayerType.HEADING,
+            LayerType.HORIZONTAL_RULE,
+            LayerType.INLINE_CODE,
+            LayerType.EMPHASIS,
+            LayerType.LINK,
+            LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
+        },
+        -1,
+    ),
+    # HORIZONTAL_RULE is a leaf — no children
+    LayerType.HORIZONTAL_RULE: (set(), 0),
 }
 
 
@@ -666,7 +714,6 @@ class PhysicalComponent(BaseModel):
 # TYPED COMPONENT MODELS — One per LayerType (P2.6)
 # =============================================================================
 
-
 class EmphasisType(str, Enum):
     """Type of emphasis detected."""
 
@@ -684,6 +731,75 @@ class LinkType(str, Enum):
     IMAGE = "image"
     AUTO = "auto"
 
+
+class HeadingStyle(str, Enum):
+    """Heading syntax style."""
+
+    ATX = "atx"
+    SETEXT = "setext"
+
+
+class HRuleStyle(str, Enum):
+    """Rendering style for horizontal rule separators."""
+
+    DASH = "dash"       # --- (3+ dashes)
+    STAR = "star"       # *** (3+ stars)
+    UNDERSCORE = "underscore"  # ___ (3+ underscores)
+
+
+class ListStyle(str, Enum):
+    """List style."""
+
+    ORDERED = "ordered"
+    UNORDERED = "unordered"
+
+
+# --- Nested objects ---
+
+class CellPosition(BaseModel):
+    """Position of a table cell."""
+
+    row: int = Field(..., ge=0, description="Row index (0-based)")
+    col: int = Field(..., ge=0, description="Column index (0-based)")
+    is_header: bool = Field(default=False, description="Whether this cell is a header")
+
+
+class TableRow(BaseModel):
+    """A row in a table."""
+
+    row_index: int = Field(..., ge=0, description="Row index (0-based)")
+    cells: list["TableCell"] = Field(default_factory=list, description="Cells in this row")
+
+
+class TableCell(BaseModel):
+    """A cell in a table."""
+
+    position: CellPosition = Field(..., description="Cell position")
+    children: list[str] = Field(default_factory=list, description="Component IDs of children")
+    is_header: bool = Field(default=False, description="Whether this is a header cell")
+
+
+class ListItem(BaseModel):
+    """An item in a list."""
+
+    item_index: int = Field(..., ge=0, description="Item index (0-based)")
+    children: list[str] = Field(default_factory=list, description="Component IDs of children")
+    char_start: Optional[int] = Field(default=None, description="Character offset start")
+    char_end: Optional[int] = Field(default=None, description="Character offset end")
+
+
+class TaskItem(BaseModel):
+    """A task item (checkbox) in a task list."""
+
+    item_index: int = Field(..., ge=0, description="Item index (0-based)")
+    text: str = Field(default="", description="Task item text")
+    is_checked: bool = Field(default=False, description="Whether the task is checked")
+    children: list[str] = Field(default_factory=list, description="Component IDs of children")
+    char_start: Optional[int] = Field(default=None, description="Character offset start")
+    char_end: Optional[int] = Field(default=None, description="Character offset end")
+
+
+# --- Heading ---
 
 class HeadingComponent(PhysicalComponent):
     """A heading physical component with level and text."""
@@ -703,17 +819,24 @@ class HeadingComponent(PhysicalComponent):
         default=None,
         description="Generated anchor ID for the heading",
     )
+    heading_style: HeadingStyle = Field(
+        default=HeadingStyle.ATX,
+        description="Heading syntax style (ATX '#', SETEXT '===' or '---')",
+    )
 
+
+# --- Paragraph ---
 
 class ParagraphComponent(PhysicalComponent):
     """A paragraph physical component."""
 
     word_count: Optional[int] = Field(
         default=None,
-        ge=0,
-        description="Word count of the paragraph",
+        description="Number of words in the paragraph",
     )
 
+
+# --- Code Block ---
 
 class CodeBlockComponent(PhysicalComponent):
     """A code block physical component with language info."""
@@ -728,8 +851,121 @@ class CodeBlockComponent(PhysicalComponent):
     )
 
 
+# --- Indented Code Block ---
+
+class IndentedCodeBlockComponent(PhysicalComponent):
+    """An indented code block physical component (4-space indented)."""
+
+    line_count: int = Field(
+        default=1,
+        description="Number of lines in the indented code block",
+    )
+
+
+# --- Blockquote ---
+
+class BlockquoteComponent(PhysicalComponent):
+    """A blockquote physical component."""
+
+    quote_level: int = Field(
+        default=1,
+        ge=1,
+        description="Depth of blockquote nesting",
+    )
+    style: str = Field(
+        default="blockquote",
+        description="Blockquote style",
+    )
+    attribution: Optional[str] = Field(
+        default=None,
+        description="Attribution text",
+    )
+
+
+# --- Footnote Ref ---
+
+class FootnoteRefComponent(PhysicalComponent):
+    """An inline footnote reference physical component ([^id])."""
+
+    ref_id: str = Field(
+        ...,
+        min_length=1,
+        description="Footnote reference identifier",
+    )
+
+    @property
+    def target_id(self) -> str:
+        """The footnote definition ID this reference points to."""
+        return self.ref_id
+
+
+# --- Footnote ---
+
+class FootnoteComponent(PhysicalComponent):
+    """A footnote physical component."""
+
+    footnote_id: str = Field(
+        ...,
+        min_length=1,
+        description="Footnote identifier",
+    )
+    label: Optional[str] = Field(
+        default=None,
+        description="Footnote label",
+    )
+    has_url: bool = Field(
+        default=False,
+        description="Whether the footnote contains URLs",
+    )
+
+
+# --- Metadata ---
+
+class MetadataComponent(PhysicalComponent):
+    """A metadata (front matter) physical component."""
+
+    format: str = Field(
+        default="yaml",
+        description="Front matter format",
+    )
+    keys: list[str] = Field(
+        default_factory=list,
+        description="Top-level keys in the metadata",
+    )
+
+
+# --- Figure ---
+
+class FigureComponent(PhysicalComponent):
+    """A figure (image) physical component."""
+
+    image_url: str = Field(
+        ...,
+        min_length=1,
+        description="Image source URL",
+    )
+    alt_text: Optional[str] = Field(
+        default=None,
+        description="Image alt text",
+    )
+    caption: Optional[str] = Field(
+        default=None,
+        description="Figure caption",
+    )
+    width: Optional[int] = Field(
+        default=None,
+        description="Image width in pixels",
+    )
+    height: Optional[int] = Field(
+        default=None,
+        description="Image height in pixels",
+    )
+
+
+# --- Diagram ---
+
 class DiagramComponent(PhysicalComponent):
-    """A diagram physical component (mermaid, graphviz, etc.)."""
+    """A diagram physical component."""
 
     diagram_type: str = Field(
         ...,
@@ -742,74 +978,7 @@ class DiagramComponent(PhysicalComponent):
     )
 
 
-class FootnoteComponent(PhysicalComponent):
-    """A footnote physical component."""
-
-    footnote_id: str = Field(
-        ...,
-        min_length=1,
-        description="Footnote identifier",
-    )
-    has_url: bool = Field(
-        default=False,
-        description="Whether the footnote contains URLs",
-    )
-
-
-class MetadataComponent(PhysicalComponent):
-    """A metadata/front-matter physical component."""
-
-    format: str = Field(
-        ...,
-        description="Metadata format (yaml, toml)",
-    )
-    keys: list[str] = Field(
-        default_factory=list,
-        description="Metadata keys found in front matter",
-    )
-
-
-class FigureComponent(PhysicalComponent):
-    """A figure/image physical component."""
-
-    image_url: str = Field(
-        ...,
-        min_length=1,
-        description="URL or path of the image",
-    )
-    alt_text: str = Field(
-        default="",
-        description="Alt text for the image",
-    )
-    width: Optional[int] = Field(
-        default=None,
-        gt=0,
-        description="Image width in pixels",
-    )
-    height: Optional[int] = Field(
-        default=None,
-        gt=0,
-        description="Image height in pixels",
-    )
-
-
-class BlockquoteComponent(PhysicalComponent):
-    """A blockquote physical component."""
-
-    style: str = Field(
-        default="blockquote",
-        description="Blockquote style (blockquote, note, tip, warning, etc.)",
-    )
-    quote_level: int = Field(
-        default=1,
-        ge=1,
-        description="Nesting depth of the blockquote (1 = single >)",
-    )
-    attribution: Optional[str] = Field(
-        default=None,
-        description="Attribution/source of the quote",
-    )
-
+# --- Inline Code ---
 
 class InlineCodeComponent(PhysicalComponent):
     """An inline code physical component."""
@@ -817,57 +986,64 @@ class InlineCodeComponent(PhysicalComponent):
     content: str = Field(
         ...,
         min_length=1,
-        description="Code content without backticks",
+        description="Inline code content",
     )
     language_hint: Optional[str] = Field(
         default=None,
-        description="Hint about the code language",
+        description="Language hint",
     )
     syntax_category: Optional[str] = Field(
         default=None,
-        description="Syntax category (variable, function, command, etc.)",
+        description="Detected syntax category",
     )
 
 
+# --- Emphasis ---
+
 class EmphasisComponent(PhysicalComponent):
-    """An emphasis (bold/italic/strikethrough) physical component."""
+    """An emphasis physical component."""
 
     emphasis_type: EmphasisType = Field(
-        ...,
+        default=EmphasisType.ITALIC,
         description="Type of emphasis",
     )
     marker: str = Field(
-        ...,
+        default="*",
         min_length=1,
-        description="Markdown marker used (**, *, __, _, ~~)",
+        description="Markdown marker used",
     )
 
+
+# --- Link ---
 
 class LinkComponent(PhysicalComponent):
     """A link physical component."""
 
     link_type: LinkType = Field(
-        ...,
+        default=LinkType.INLINE,
         description="Type of link",
     )
     text: str = Field(
         ...,
-        description="Link text or alt text",
+        min_length=1,
+        description="Link display text",
     )
     url: str = Field(
         ...,
         min_length=1,
-        description="Target URL or reference identifier",
+        description="Link target URL",
     )
-    is_external: Optional[bool] = Field(
-        default=None,
-        description="Whether the link points to an external resource",
+    is_external: bool = Field(
+        default=False,
+        description="Whether the link is external",
     )
     domain: Optional[str] = Field(
         default=None,
-        description="Domain extracted from the URL",
+        description="Extracted domain from URL",
     )
 
+
+# --- HTML Block ---
 
 class HtmlBlockComponent(PhysicalComponent):
     """An HTML block physical component."""
@@ -879,16 +1055,18 @@ class HtmlBlockComponent(PhysicalComponent):
     )
     attributes: dict[str, str] = Field(
         default_factory=dict,
-        description="HTML attributes as key-value pairs",
+        description="HTML attributes",
     )
     is_semantic: bool = Field(
         default=False,
-        description="Whether the tag is a semantic HTML5 element",
+        description="Whether the tag is semantic HTML5",
     )
 
 
+# --- HTML Inline ---
+
 class HtmlInlineComponent(PhysicalComponent):
-    """An HTML inline physical component."""
+    """An inline HTML physical component."""
 
     tag_name: str = Field(
         ...,
@@ -897,213 +1075,152 @@ class HtmlInlineComponent(PhysicalComponent):
     )
     attributes: dict[str, str] = Field(
         default_factory=dict,
-        description="HTML attributes as key-value pairs",
+        description="HTML attributes",
     )
     is_self_closing: bool = Field(
         default=False,
-        description="Whether the element is self-closing",
+        description="Whether the tag is self-closing",
     )
 
 
-# =============================================================================
-# NESTED OBJECT SCHEMAS — Table and List internal structure
-# =============================================================================
+# --- Horizontal Rule ---
 
+class HorizontalRuleComponent(PhysicalComponent):
+    """A horizontal rule (thematic break) physical component."""
 
-class CellPosition(BaseModel):
-    """Position of a component inside a table cell."""
-
-    row: int = Field(
-        ...,
+    style: HRuleStyle = Field(
+        default=HRuleStyle.DASH,
+        description="Character type used for the rule",
+    )
+    length: int = Field(
+        default=0,
         ge=0,
-        description="Row index (0-based)",
-    )
-    col: int = Field(
-        ...,
-        ge=0,
-        description="Column index (0-based)",
-    )
-    is_header: bool = Field(
-        default=False,
-        description="True if this cell is in the header row",
+        description="Number of separator characters",
     )
 
-
-class ListStyle(str, Enum):
-    """List rendering style."""
-
-    ORDERED = "ordered"
-    UNORDERED = "unordered"
-
-
-class ListItem(BaseModel):
-    """A single item within a list component.
-
-    List items are structural elements (not LayerTypes). Each item
-    can contain child PhysicalComponents (paragraphs, sub-lists,
-    code blocks, figures, etc.).
-    """
-
-    item_index: int = Field(
-        ...,
-        ge=0,
-        description="Position in parent list (0-based)",
-    )
-    children: list[str] = Field(
-        default_factory=list,
-        description="Child PhysicalComponent IDs (paragraphs, sub-lists, code blocks, etc.)",
-    )
-    char_start: Optional[int] = Field(
-        default=None,
-        description="Character offset in source text (start, inclusive)",
-    )
-    char_end: Optional[int] = Field(
-        default=None,
-        description="Character offset in source text (end, exclusive)",
-    )
+    @model_validator(mode="after")
+    def compute_length(self) -> "HorizontalRuleComponent":
+        if self.length == 0 and self.raw_content:
+            self.length = sum(1 for c in self.raw_content if c.strip())
+        return self
 
 
-class TableCell(BaseModel):
-    """A single cell within a table row.
-
-    Table cells are structural elements (not LayerTypes). Each cell
-    can contain child PhysicalComponents (paragraphs, lists, code blocks,
-    figures, diagrams, etc.).
-    """
-
-    position: CellPosition = Field(
-        ...,
-        description="Row and column position of this cell",
-    )
-    children: list[str] = Field(
-        default_factory=list,
-        description="Child PhysicalComponent IDs within this cell",
-    )
-    char_start: Optional[int] = Field(
-        default=None,
-        description="Character offset in source text (start, inclusive)",
-    )
-    char_end: Optional[int] = Field(
-        default=None,
-        description="Character offset in source text (end, exclusive)",
-    )
-
-
-class TableRow(BaseModel):
-    """A single row within a table component."""
-
-    row_index: int = Field(
-        ...,
-        ge=0,
-        description="Row index (0-based)",
-    )
-    cells: list[TableCell] = Field(
-        default_factory=list,
-        description="Cells in this row (length must match table num_cols)",
-    )
-
+# --- Table ---
 
 class TableComponent(PhysicalComponent):
-    """A table physical component with structured row/cell layout.
-
-    Extends PhysicalComponent with explicit table structure:
-    - rows: organized by TableRow → TableCell → child components
-    - num_cols: column count (validated for consistency)
-    - has_header: whether first row is a header
-
-    The inherited `children` field holds all child component IDs (flat),
-    while `rows` provides the structured hierarchical view.
-    """
+    """A table physical component."""
 
     rows: list[TableRow] = Field(
         default_factory=list,
-        description="Table rows with cells and their child components",
+        description="Table rows",
     )
     num_cols: int = Field(
         default=0,
         ge=0,
-        description="Number of columns (auto-set from rows if 0)",
+        description="Number of columns (auto-computed if 0)",
     )
     has_header: bool = Field(
         default=False,
-        description="True if the first row is a header row",
+        description="Whether the table has a header row",
     )
 
     @model_validator(mode="after")
-    def validate_table_structure(self) -> "TableComponent":
+    def validate_and_compute_cols(self) -> "TableComponent":
         if self.rows:
-            # Auto-detect num_cols from first row if not set
-            if self.num_cols == 0:
-                self.num_cols = len(self.rows[0].cells)
-
-            # Validate all rows have consistent column count
-            for row in self.rows:
-                if len(row.cells) != self.num_cols:
+            first_row_cols = len(self.rows[0].cells)
+            for i, row in enumerate(self.rows):
+                if len(row.cells) != first_row_cols:
                     raise ValueError(
-                        f"Table {self.component_id}: row {row.row_index} has "
-                        f"{len(row.cells)} cells, expected {self.num_cols}"
+                        f"row {i} has {len(row.cells)} cells, expected {first_row_cols}"
                     )
-
-            # Validate cell positions match row/cell indices
-            for row in self.rows:
-                for cell in row.cells:
-                    if cell.position.row != row.row_index:
+                for j, cell in enumerate(row.cells):
+                    if cell.position.row != i:
+                        raise ValueError("row mismatch")
+                    if cell.position.col != j:
                         raise ValueError(
-                            f"Table {self.component_id}: cell at ({cell.position.row}, "
-                            f"{cell.position.col}) has row mismatch with parent row {row.row_index}"
+                            f"cell at row {i} col {j}: expected {j}"
                         )
-                    expected_col = row.cells.index(cell)
-                    if cell.position.col != expected_col:
-                        raise ValueError(
-                            f"Table {self.component_id}: cell at row {row.row_index} "
-                            f"has col {cell.position.col}, expected {expected_col}"
-                        )
-
-            # Validate header row position flag
-            for row in self.rows:
-                for cell in row.cells:
-                    expected_header = self.has_header and row.row_index == 0
-                    if cell.position.is_header != expected_header:
-                        raise ValueError(
-                            f"Table {self.component_id}: cell ({cell.position.row}, "
-                            f"{cell.position.col}) is_header={cell.position.is_header} "
-                            f"doesn't match expected={expected_header}"
-                        )
-
+            if self.num_cols == 0:
+                self.num_cols = first_row_cols
+            if self.has_header and self.rows:
+                for cell in self.rows[0].cells:
+                    is_h = cell.is_header or cell.position.is_header
+                    if not is_h:
+                        raise ValueError("is_header mismatch")
         return self
 
 
+# --- List ---
+
 class ListComponent(PhysicalComponent):
-    """A list physical component with structured item layout.
-
-    Extends PhysicalComponent with explicit list structure:
-    - items: organized by ListItem → child components
-    - style: ordered (numbered) or unordered (bulleted)
-
-    The inherited `children` field holds all child component IDs (flat),
-    while `items` provides the structured hierarchical view.
-    """
+    """A list physical component."""
 
     items: list[ListItem] = Field(
         default_factory=list,
-        description="List items with their child components",
+        description="List items",
     )
     style: ListStyle = Field(
         default=ListStyle.UNORDERED,
-        description="List rendering style (ordered or unordered)",
+        description="List style (ordered/unordered)",
     )
 
     @model_validator(mode="after")
-    def validate_list_structure(self) -> "ListComponent":
-        if self.items:
-            # Validate item indices are sequential
-            for i, item in enumerate(self.items):
-                if item.item_index != i:
-                    raise ValueError(
-                        f"List {self.component_id}: item at position {i} has "
-                        f"item_index={item.item_index}, expected {i}"
-                    )
+    def validate_sequential_indices(self) -> "ListComponent":
+        for i, item in enumerate(self.items):
+            if item.item_index != i:
+                raise ValueError(
+                    f"item {i} has index {item.item_index}, expected {i}"
+                )
         return self
+
+
+# --- Task List ---
+
+class TaskListComponent(PhysicalComponent):
+    """A task list physical component."""
+
+    items: list[TaskItem] = Field(
+        default_factory=list,
+        description="Task items with checkbox state",
+    )
+    style: ListStyle = Field(
+        default=ListStyle.UNORDERED,
+        description="List style",
+    )
+
+    @model_validator(mode="after")
+    def validate_sequential_indices(self) -> "TaskListComponent":
+        seen = set()
+        for i, item in enumerate(self.items):
+            if item.item_index in seen:
+                raise ValueError(
+                    f"duplicate item_index {item.item_index}"
+                )
+            if item.item_index != i:
+                raise ValueError(
+                    f"item_index {item.item_index} at position {i}, expected {i}"
+                )
+            seen.add(item.item_index)
+        return self
+
+    @property
+    def task_count(self) -> int:
+        return len(self.items)
+
+    @property
+    def checked_count(self) -> int:
+        return sum(1 for item in self.items if item.is_checked)
+
+    @property
+    def completion_rate(self) -> float:
+        if not self.items:
+            return 0.0
+        return self.checked_count / len(self.items)
+
+
+# Resolve forward references
+TableRow.model_rebuild()
+TableCell.model_rebuild()
 
 
 class TopologyConfig(BaseModel):
@@ -1135,15 +1252,17 @@ class Stage2Input(BaseModel):
 
 
 # =============================================================================
-# TYPED COMPONENT UNION — Union of all 15 typed component models (P2.6)
+# TYPED COMPONENT UNION — Union of all 18 typed component models (P2.9)
 # =============================================================================
 
 TypedComponent = (
     HeadingComponent
     | ParagraphComponent
     | CodeBlockComponent
+    | IndentedCodeBlockComponent
     | DiagramComponent
     | FootnoteComponent
+    | FootnoteRefComponent
     | MetadataComponent
     | FigureComponent
     | BlockquoteComponent
@@ -1154,13 +1273,15 @@ TypedComponent = (
     | HtmlInlineComponent
     | TableComponent
     | ListComponent
+    | TaskListComponent
+    | HorizontalRuleComponent
 )
 
 
 class Stage2Output(BaseModel):
     """Output schema for the physical topology stage.
 
-    ``discovered_layers`` accepts any of the 15 typed component models
+    ``discovered_layers`` accepts any of the 18 typed component models
     (all subclasses of PhysicalComponent). The ``TypedComponent`` union
     type alias is provided for type hints and IDE autocomplete.
     """

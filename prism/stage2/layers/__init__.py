@@ -25,6 +25,7 @@ from prism.stage2.layers.detectors import (
     BlockquoteDetector,
     MetadataDetector,
     FootnoteDetector,
+    FootnoteRefDetector,
     DiagramDetector,
     FigureDetector,
     InlineCodeDetector,
@@ -32,6 +33,8 @@ from prism.stage2.layers.detectors import (
     LinkDetector,
     HTMLBlockDetector,
     HTMLInlineDetector,
+    HRDetector,
+    IndentedCodeBlockDetector,
     _walk_ast,
     _build_instance,
     _scan_inline_nodes,
@@ -51,8 +54,14 @@ from prism.stage2.layers.specific_detectors import (
     UnifiedHTMLBlockDetector,
     UnifiedHTMLInlineDetector,
     UnifiedCodeBlockDetector,
-    UnifiedListDetector,
+    HybridListDetector,
+    ASTHRDetector,
+    ASTIndentedCodeBlockDetector,
+    RegexFootnoteRefDetector,
 )
+from prism.stage2.layers.task_list import TaskListCRUD
+from prism.stage2.layers.horizontal_rule import HRCRUD
+from prism.stage2.layers.indented_code_block import IndentedCodeBlockCRUD
 # Import all layer CRUD modules to trigger auto-registration
 from prism.stage2.layers.table import TableCRUD
 from prism.stage2.layers.list import ListCRUD
@@ -62,6 +71,7 @@ from prism.stage2.layers.simple_layers import (
     CodeBlockCRUD,
     BlockquoteCRUD,
     FootnoteCRUD,
+    FootnoteRefCRUD,
     MetadataCRUD,
     FigureCRUD,
     DiagramCRUD,
@@ -96,6 +106,7 @@ __all__ = [
     "BlockquoteDetector",
     "MetadataDetector",
     "FootnoteDetector",
+    "FootnoteRefDetector",
     "DiagramDetector",
     "FigureDetector",
     "InlineCodeDetector",
@@ -103,17 +114,21 @@ __all__ = [
     "LinkDetector",
     "HTMLBlockDetector",
     "HTMLInlineDetector",
+    "HRDetector",
+    "IndentedCodeBlockDetector",
     # Concrete implementations (AST-based)
     "ASTHeadingDetector",
     "ASTParagraphDetector",
     "ASTTableDetector",
     "ASTBlockquoteDetector",
+    "ASTHRDetector",
+    "ASTIndentedCodeBlockDetector",
     # Concrete implementations (Hybrid AST + raw text)
     "HybridMetadataDetector",
     # Concrete implementations (Compositional: Prism + mrkdwn_analysis)
     "UnifiedFootnoteDetector",
     "UnifiedCodeBlockDetector",
-    "UnifiedListDetector",
+    "HybridListDetector",
     "UnifiedLinkDetector",
     "UnifiedHTMLBlockDetector",
     "UnifiedHTMLInlineDetector",
@@ -123,6 +138,7 @@ __all__ = [
     "RegexFigureDetector",
     "RegexInlineCodeDetector",
     "RegexEmphasisDetector",
+    "RegexFootnoteRefDetector",
     # Utility functions
     "_walk_ast",
     "_build_instance",
@@ -135,6 +151,7 @@ __all__ = [
     "CodeBlockCRUD",
     "BlockquoteCRUD",
     "FootnoteCRUD",
+    "FootnoteRefCRUD",
     "MetadataCRUD",
     "FigureCRUD",
     "DiagramCRUD",
@@ -143,4 +160,7 @@ __all__ = [
     "LinkCRUD",
     "HTMLBlockCRUD",
     "HTMLInlineCRUD",
+    "TaskListCRUD",
+    "HRCRUD",
+    "IndentedCodeBlockCRUD",
 ]

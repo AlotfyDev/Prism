@@ -17,7 +17,9 @@ from prism.schemas.physical import (
     EmphasisType,
     FigureComponent,
     FootnoteComponent,
+    FootnoteRefComponent,
     HeadingComponent,
+    HeadingStyle,
     HtmlBlockComponent,
     HtmlInlineComponent,
     InlineCodeComponent,
@@ -48,19 +50,33 @@ class HeadingCRUD(LayerCRUD[HeadingComponent]):
         level: int | None = None,
         text: str | None = None,
         anchor_id: str | None = None,
+        heading_style: HeadingStyle | str | None = None,
         char_start: int = 0,
         char_end: int = 0,
     ) -> HeadingComponent:
-        if level is None:
-            level = 0
-            for ch in raw_content:
-                if ch == "#":
-                    level += 1
-                else:
-                    break
-            level = max(1, min(6, level))
-        if text is None:
-            text = raw_content.lstrip("#").strip()
+        if heading_style is None:
+            heading_style = HeadingStyle.ATX
+        elif isinstance(heading_style, str):
+            heading_style = HeadingStyle(heading_style)
+
+        if heading_style == HeadingStyle.SETEXT:
+            if level is None:
+                level = 1 if "=" in raw_content else 2
+            if text is None:
+                lines = raw_content.strip().split("\n")
+                text = lines[0].strip() if lines else raw_content.strip()
+        else:
+            if level is None:
+                level = 0
+                for ch in raw_content:
+                    if ch == "#":
+                        level += 1
+                    else:
+                        break
+                level = max(1, min(6, level))
+            if text is None:
+                text = raw_content.lstrip("#").strip()
+
         if not text:
             text = raw_content.strip()
         if char_end == 0:
@@ -72,6 +88,7 @@ class HeadingCRUD(LayerCRUD[HeadingComponent]):
             level=level,
             text=text,
             anchor_id=anchor_id,
+            heading_style=heading_style,
             char_start=char_start,
             char_end=char_end,
         )
@@ -246,6 +263,7 @@ class FootnoteCRUD(LayerCRUD[FootnoteComponent]):
             layer_type=LayerType.FOOTNOTE,
             raw_content=raw_content,
             footnote_id=fid,
+            label=label or fid,
             has_url=has_url,
             char_start=char_start,
             char_end=char_end,
@@ -346,6 +364,7 @@ class FigureCRUD(LayerCRUD[FigureComponent]):
             raw_content=raw_content,
             image_url=url,
             alt_text=alt,
+            caption=caption,
             width=width,
             height=height,
             char_start=char_start,
@@ -625,3 +644,47 @@ class HTMLInlineCRUD(LayerCRUD[HtmlInlineComponent]):
 
 
 LayerRegistry.register(LayerType.HTML_INLINE, HTMLInlineCRUD())
+
+
+# =============================================================================
+# FootnoteRefCRUD → FootnoteRefComponent
+# =============================================================================
+
+class FootnoteRefCRUD(LayerCRUD[FootnoteRefComponent]):
+    """CRUD for inline footnote reference components ([^id])."""
+
+    @property
+    def layer_type(self) -> LayerType:
+        return LayerType.FOOTNOTE_REF
+
+    def create(
+        self,
+        identifier: str,
+        raw_content: str,
+        ref_id: str | None = None,
+        char_start: int = 0,
+        char_end: int = 0,
+    ) -> FootnoteRefComponent:
+        if not ref_id:
+            import re as _re
+            m = _re.search(r"\[\^([^\]]+)\]", raw_content)
+            if m:
+                ref_id = m.group(1)
+        if not ref_id:
+            ref_id = identifier
+        if char_end == 0:
+            char_end = char_start + len(raw_content)
+        return FootnoteRefComponent(
+            component_id=f"footnote_ref:{identifier}",
+            layer_type=LayerType.FOOTNOTE_REF,
+            raw_content=raw_content,
+            ref_id=ref_id,
+            char_start=char_start,
+            char_end=char_end,
+        )
+
+    def get_ref_id(self, component: FootnoteRefComponent) -> str:
+        return component.ref_id
+
+
+LayerRegistry.register(LayerType.FOOTNOTE_REF, FootnoteRefCRUD())

@@ -401,16 +401,20 @@ class TestNestingMatrixTableAndListRules:
         expected_children = {
             LayerType.PARAGRAPH,
             LayerType.LIST,
+            LayerType.TASK_LIST,
             LayerType.TABLE,
             LayerType.CODE_BLOCK,
+            LayerType.INDENTED_CODE_BLOCK,
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
             LayerType.DIAGRAM,
             LayerType.HEADING,
+            LayerType.HORIZONTAL_RULE,
             LayerType.INLINE_CODE,
             LayerType.EMPHASIS,
             LayerType.LINK,
             LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
         }
         actual = matrix.get_valid_children(LayerType.TABLE)
         assert actual == expected_children
@@ -444,16 +448,20 @@ class TestNestingMatrixTableAndListRules:
         expected_children = {
             LayerType.PARAGRAPH,
             LayerType.LIST,
+            LayerType.TASK_LIST,
             LayerType.TABLE,
             LayerType.CODE_BLOCK,
+            LayerType.INDENTED_CODE_BLOCK,
             LayerType.BLOCKQUOTE,
             LayerType.FIGURE,
             LayerType.DIAGRAM,
             LayerType.HEADING,
+            LayerType.HORIZONTAL_RULE,
             LayerType.INLINE_CODE,
             LayerType.EMPHASIS,
             LayerType.LINK,
             LayerType.HTML_INLINE,
+            LayerType.FOOTNOTE_REF,
         }
         actual = matrix.get_valid_children(LayerType.LIST)
         assert actual == expected_children

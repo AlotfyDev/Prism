@@ -608,3 +608,64 @@ class HTMLInlineDetector(LayerDetector):
     @property
     def layer_type(self) -> LayerType:
         return LayerType.HTML_INLINE
+
+
+# =============================================================================
+# CONTRACT: HRDetector
+# =============================================================================
+
+
+class HRDetector(LayerDetector):
+    """Contract for horizontal rule detectors.
+
+    Detects horizontal rules (thematic breaks) from Markdown AST nodes.
+    Horizontal rules use 3+ identical characters: ``---``, ``***``, ``___``.
+
+    Expected attributes on LayerInstance:
+      - ``style``: "dash", "star", or "underscore"
+    """
+
+    @property
+    def layer_type(self) -> LayerType:
+        return LayerType.HORIZONTAL_RULE
+
+
+# =============================================================================
+# CONTRACT: IndentedCodeBlockDetector
+# =============================================================================
+
+
+class IndentedCodeBlockDetector(LayerDetector):
+    """Contract for indented code block detectors.
+
+    Detects indented code blocks (4+ spaces or 1+ tab) from Markdown AST nodes.
+    Indented code blocks have no language specification and are treated as
+    raw preformatted text per CommonMark spec.
+
+    Expected attributes on LayerInstance:
+      - ``line_count``: number of lines in the code block
+    """
+
+    @property
+    def layer_type(self) -> LayerType:
+        return LayerType.INDENTED_CODE_BLOCK
+
+
+# =============================================================================
+# CONTRACT: FootnoteRefDetector
+# =============================================================================
+
+
+class FootnoteRefDetector(LayerDetector):
+    """Contract for footnote reference detectors.
+
+    Detects inline footnote references (``[^id]``) within paragraph/inline text.
+    These are the markers that link to footnote definitions at the end of the document.
+
+    Expected attributes on LayerInstance:
+      - ``ref_id``: footnote reference identifier string
+    """
+
+    @property
+    def layer_type(self) -> LayerType:
+        return LayerType.FOOTNOTE_REF

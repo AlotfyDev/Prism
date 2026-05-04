@@ -32,6 +32,7 @@ from prism.stage2.layers.detectors import (
     BlockquoteDetector,
     MetadataDetector,
     FootnoteDetector,
+    FootnoteRefDetector,
     DiagramDetector,
     FigureDetector,
     InlineCodeDetector,
@@ -39,6 +40,8 @@ from prism.stage2.layers.detectors import (
     LinkDetector,
     HTMLBlockDetector,
     HTMLInlineDetector,
+    HRDetector,
+    IndentedCodeBlockDetector,
     _walk_ast,
     _build_instance,
     _scan_inline_nodes,
@@ -208,7 +211,8 @@ class ASTHeadingDetector(HeadingDetector):
         def predicate(node: MarkdownNode) -> Optional[dict[str, str]]:
             if node.node_type == NodeType.HEADING:
                 level = node.level if node.level is not None else 1
-                return {"level": str(level)}
+                heading_style = node.attributes.get("heading_style", "atx")
+                return {"level": str(level), "heading_style": heading_style}
             return None
 
         return _walk_ast(nodes, predicate, LayerType.HEADING, source_text)
@@ -989,15 +993,23 @@ class UnifiedCodeBlockDetector(CodeBlockDetector):
         return results
 
 
-class UnifiedListDetector(ListDetector):
+class HybridListDetector(ListDetector):
     """Compositional: Prism AST lists + task items detection.
 
     Detects ordered and unordered lists via Prism AST. Additionally scans
-    list items for task list syntax ``- [ ]`` / ``- [x]`` and enriches
-    instances with task metadata.
+    list items for task list syntax ``- [ ]`` / ``- [x]``.
+
+    If ANY list item has task syntax → the entire list is classified as TASK_LIST.
+    Otherwise → classified as LIST.
+
+    This enables Stage 3 to semantically analyze task lists differently
+    (action items, completion state, dependencies).
     """
 
-    _TASK_RE = re.compile(r"^\[([ xX])\]\s+(.*)$")
+    _TASK_ITEM_RE = re.compile(
+        r"^\s*(?:[*\-+]|\d+\.)\s+\[\s*([xX ])\s*\]\s+(.*)$",
+        re.MULTILINE,
+    )
 
     def detect(
         self,
@@ -1012,18 +1024,119 @@ class UnifiedListDetector(ListDetector):
 
         results = _walk_ast(nodes, predicate, LayerType.LIST, source_text)
 
-        # Enrich with task item detection
+        # Classify each list: TASK_LIST if any task items, else LIST
+        classified: list[LayerInstance] = []
         for inst in results:
             raw = inst.raw_content
-            tasks = self._TASK_RE.findall(raw)
-            if tasks:
-                inst.attributes["has_tasks"] = "True"
-                inst.attributes["task_count"] = str(len(tasks))
-                checked = sum(1 for state, _ in tasks if state.lower() == "x")
-                inst.attributes["checked_count"] = str(checked)
-            else:
-                inst.attributes["has_tasks"] = "False"
-                inst.attributes["task_count"] = "0"
-                inst.attributes["checked_count"] = "0"
+            task_matches = list(self._TASK_ITEM_RE.finditer(raw))
 
-        return results
+            if task_matches:
+                inst.layer_type = LayerType.TASK_LIST
+                inst.attributes["style"] = inst.attributes.get("style", "unordered")
+                inst.attributes["task_count"] = str(len(task_matches))
+                checked = sum(1 for m in task_matches if m.group(1).lower() == "x")
+                inst.attributes["checked_count"] = str(checked)
+
+                task_items_json = self._serialize_task_items(task_matches)
+                inst.attributes["task_items"] = task_items_json
+
+            classified.append(inst)
+
+        return classified
+
+    @staticmethod
+    def _serialize_task_items(matches: list[re.Match]) -> str:
+        """Serialize task items to JSON for downstream parsing."""
+        import json
+
+        items = []
+        for i, m in enumerate(matches):
+            items.append({
+                "index": i,
+                "checked": m.group(1).lower() == "x",
+                "text": m.group(2).strip(),
+                "char_start": m.start(),
+                "char_end": m.end(),
+            })
+        return json.dumps(items)
+
+
+# =============================================================================
+# AST-based Horizontal Rule Detector
+# =============================================================================
+
+
+class ASTHRDetector(HRDetector):
+    """AST-based implementation: matches NodeType.HR nodes."""
+
+    def detect(
+        self,
+        nodes: list[MarkdownNode],
+        source_text: str,
+    ) -> list[LayerInstance]:
+        def predicate(node: MarkdownNode) -> Optional[dict[str, str]]:
+            if node.node_type == NodeType.HR:
+                markup = node.attributes.get("markup", "---")
+                if markup.startswith("*"):
+                    style = "star"
+                elif markup.startswith("_"):
+                    style = "underscore"
+                else:
+                    style = "dash"
+                return {"style": style}
+            return None
+
+        return _walk_ast(nodes, predicate, LayerType.HORIZONTAL_RULE, source_text)
+
+
+# =============================================================================
+# AST-based Indented Code Block Detector
+# =============================================================================
+
+
+class ASTIndentedCodeBlockDetector(IndentedCodeBlockDetector):
+    """AST-based implementation: matches NodeType.INDENTED_CODE_BLOCK nodes."""
+
+    def detect(
+        self,
+        nodes: list[MarkdownNode],
+        source_text: str,
+    ) -> list[LayerInstance]:
+        def predicate(node: MarkdownNode) -> Optional[dict[str, str]]:
+            if node.node_type == NodeType.INDENTED_CODE_BLOCK:
+                content = node.raw_content.rstrip("\n")
+                line_count = content.count("\n") + 1 if content else 0
+                return {"line_count": str(line_count)}
+            return None
+
+        return _walk_ast(nodes, predicate, LayerType.INDENTED_CODE_BLOCK, source_text)
+
+
+# =============================================================================
+# Regex-based Footnote Reference Detector
+# =============================================================================
+
+
+class RegexFootnoteRefDetector(FootnoteRefDetector):
+    """Regex-based implementation: scans inline nodes for [^id] references."""
+
+    FOOTNOTE_REF_RE = re.compile(r"\[\^([^\]]+)\]")
+
+    def detect(
+        self,
+        nodes: list[MarkdownNode],
+        source_text: str,
+    ) -> list[LayerInstance]:
+        return _scan_inline_nodes(
+            nodes,
+            [
+                (
+                    "footnote_ref",
+                    self.FOOTNOTE_REF_RE,
+                    lambda m: {"ref_id": m.group(1)},
+                ),
+            ],
+            LayerType.FOOTNOTE_REF,
+            source_text,
+            (NodeType.INLINE,),
+        )
